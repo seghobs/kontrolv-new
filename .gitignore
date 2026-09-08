@@ -1,0 +1,43 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Databases and keys
+*.db
+*.db3
+*.sqlite
+secret.key
+automations.json
+
+# Zip files and archives
+*.zip
+*.tar.gz
+*.rar
+
+# Environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE files
+.vscode/
+.idea/
+
+# Scratch & Temporary
+scratch/
+scratch_*.py
+local_response.html
+rendered_output.html
+
+# Local credentials and database sidecars
+admin_password.txt
+.env
+.env.*
+!.env.example
+token.json
+tokens.json
+*.db-*
+*.sqlite-*

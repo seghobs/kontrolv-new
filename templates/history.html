@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Denetim Geçmişi</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/history.css') }}">
+
+</head>
+<body class="history-page">
+<main class="container">
+    <header class="header">
+        <div class="header-brand"><div class="header-icon-badge"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i></div>
+        <div class="header-titles"><h1>Denetim Geçmişi</h1><span class="header-subtitle">Kontrolleriniz, sonuçlarınız ve değişimler</span></div></div>
+        <a class="logout-btn" href="{{ url_for('main.index') }}"><i class="fas fa-house" aria-hidden="true"></i> Ana Sayfa</a>
+    </header>
+{% include '_worker_status.html' %}
+{% include '_management_card.html' %}
+    <section class="history-panel">
+    <div class="history-section-heading"><span class="history-section-icon"><i class="fas fa-code-compare" aria-hidden="true"></i></span><div><h2>Sonuçları Karşılaştır</h2><p>İki denetim seçerek eksik listesindeki değişimleri görün.</p></div></div>
+    <form method="get" class="history-controls">
+        <label><span>Önceki denetim</span><select name="before" required>
+            <option value="">Denetim seçin</option>
+            {% for row in rows if row.state == 'completed' %}<option value="{{ row.id }}" {% if request.args.get('before') == row.id %}selected{% endif %}>{{ row.date }} · {{ row.group_name }} · {{ 'Beğeni' if row.check_likes else 'Yorum' }} · {{ row.id[:8] }}</option>{% endfor %}
+        </select></label>
+        <label><span>Sonraki denetim</span><select name="after" required>
+            <option value="">Denetim seçin</option>
+            {% for row in rows if row.state == 'completed' %}<option value="{{ row.id }}" {% if request.args.get('after') == row.id %}selected{% endif %}>{{ row.date }} · {{ row.group_name }} · {{ 'Beğeni' if row.check_likes else 'Yorum' }} · {{ row.id[:8] }}</option>{% endfor %}
+        </select></label>
+        <input type="hidden" name="page" value="{{ page }}">
+        <button class="logout-btn" type="submit">Karşılaştır</button>
+    </form>
+    </section>
+    {% if error %}<p role="alert">{{ error }}</p>{% endif %}
+    {% if members_changed %}<p>İki denetimin üye listeleri farklı. Eksik listesindeki değişimler üye veya muafiyet değişikliklerinden de kaynaklanabilir.</p>{% endif %}
+    {% if comparisons is not none %}
+    <p>“Eksik listesinden çıkanlar”, yeni kontrolde artık eksik görünmeyen kişilerdir; muafiyet değişiklikleri de bu sonucu etkileyebilir.</p>
+    <div class="history-scroll"><table class="history-table"><thead><tr><th>Paylaşım</th><th>Önceki eksikler</th><th>Yeni eksikler</th><th>Eksik listesinden çıkanlar</th><th>Yeni eklenen eksikler</th></tr></thead><tbody>
+    {% for row in comparisons %}<tr><td>{{ row.link }}{% if not row.comparable %}<small>Her iki kontrolde de geçerli sonuç yok.</small>{% endif %}</td><td>{{ row.before|join(', ') or '—' }}</td><td>{{ row.after|join(', ') or '—' }}</td><td>{{ row.resolved|join(', ') or '—' }}</td><td>{{ row.new_missing|join(', ') or '—' }}</td></tr>{% endfor %}
+    </tbody></table></div>{% endif %}
+    <section class="history-panel history-records"><div class="history-section-heading"><span class="history-section-icon"><i class="fas fa-list-check" aria-hidden="true"></i></span><div><h2>Geçmiş Kontroller</h2><p>Her denetim ayrı saklanır; yeni kontroller eski sonuçları değiştirmez.</p></div><span class="history-count">{{ rows|length }} kayıt</span></div>
+    <div class="history-scroll"><table class="history-table"><thead><tr><th>Tarih / Kimlik</th><th>Grup / Tür</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>
+    {% for row in rows %}<tr>
+        <td>{{ row.date }}<small>{{ row.id[:8] }}</small>{% if row.parent_id %}<small>Önceki: {{ row.parent_id[:8] }}</small>{% endif %}</td>
+        <td><strong>{{ row.group_name }}</strong><small class="history-group-code" title="{{ row.thread_id or '' }}">{{ row.thread_id or '' }}</small><small>{{ 'Otomasyon' if row.kind == 'automation' else ('Şablon' if row.kind == 'preset' else 'Manuel') }} · {{ 'Beğeni' if row.check_likes else 'Yorum' }}</small></td>
+        <td><span class="history-state" data-state="{{ row.state }}">{{ labels.get(row.state,row.state) }}</span>{% if row.attempts %}<small>{{ row.attempts }} / 3 deneme</small>{% endif %}{% if row.error %}<small class="history-message">{{ row.error }}</small>{% elif row.state in ('queued','running','cancelling') %}<small class="history-message">{{ row.message }}</small>{% endif %}</td>
+        <td class="history-actions"><a class="logout-btn" href="{{ url_for('main.result_page_new', post_code=row.id) }}">{{ 'Sonucu Gör' if row.state == 'completed' else 'Durumu Gör' }} <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+        {% if row.state in ('queued','running') %}
+        <form class="cancel-job-form" method="post" action="{{ url_for('history.cancel',job_id=row.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="logout-btn" type="submit">İptal Et</button>
+            {% if row.kind == 'automation' %}<small>Gönderilmiş mesajlar geri alınmaz.</small>{% endif %}
+        </form>
+        {% endif %}
+        {% if row.state in ('failed','needs_attention') %}
+        <form method="post" action="{{ url_for('history.retry',job_id=row.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if row.state == 'needs_attention' %}<label><input type="checkbox" name="confirm_resend" value="yes" required> Mesajları kontrol ettim; tekrar gönderilebileceğini kabul ediyorum.</label>{% endif %}
+            <button class="logout-btn" type="submit">Yeniden dene</button>
+        </form>{% endif %}</td>
+    </tr>{% else %}<tr><td colspan="4" class="history-empty"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i><strong>Henüz bir denetim yok</strong><span>İlk kontrolünüzden sonra sonuçlarınız burada görünecek.</span></td></tr>{% endfor %}
+    </tbody></table></div>
+    <p class="history-footnote">Eski sürümden alınan kayıtların tarihi içe aktarma zamanını gösterir.</p>
+    </section>
+    <nav class="history-pagination">{% if page > 1 %}<a class="logout-btn" href="?page={{ page-1 }}">Önceki</a>{% endif %}{% if rows|length == 30 %}<a class="logout-btn" href="?page={{ page+1 }}">Sonraki</a>{% endif %}</nav>
+</main></body></html>

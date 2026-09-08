@@ -1,0 +1,3 @@
+(() => {const label=document.getElementById('managementNotice'); if(!label)return;
+async function refresh(){try{const r=await fetch('/api/management_overview',{cache:'no-store'});if(!r.ok)return;const data=await r.json();label.textContent=[data.expiring.length ? `${data.expiring.length} muafiyet 24 saat içinde bitecek` : '', data.undo.length ? 'Geri alınabilir işlem var' : ''].filter(Boolean).join(' · ');}catch{label.textContent=' · Bildirimler alınamadı';}}
+refresh();setInterval(()=>{if(!document.hidden)refresh();},15000);})();

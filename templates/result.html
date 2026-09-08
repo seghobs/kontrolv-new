@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- Cache Devre Disi: Chrome, Safari, Firefox hicbir sayfayi hatirlamamali -->
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Eksikler</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/result.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-nav.css') }}">
+
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script>
+        const originalFetch = window.fetch;
+        window.fetch = function(input, init) {
+            if (init && init.method && init.method.toUpperCase() === 'POST') {
+                const meta = document.querySelector('meta[name="csrf-token"]');
+                if (meta) {
+                    const csrfToken = meta.getAttribute('content');
+                    init.headers = init.headers || {};
+                    if (init.headers instanceof Headers) {
+                        init.headers.set('X-CSRFToken', csrfToken);
+                    } else if (Array.isArray(init.headers)) {
+                        const idx = init.headers.findIndex(([k]) => k.toLowerCase() === 'x-csrftoken');
+                        if (idx !== -1) init.headers[idx][1] = csrfToken;
+                        else init.headers.push(['X-CSRFToken', csrfToken]);
+                    } else {
+                        init.headers['X-CSRFToken'] = csrfToken;
+                    }
+                }
+            }
+            if (init === undefined) {
+                return originalFetch(input);
+            }
+            return originalFetch(input, init);
+        };
+    </script>
+    </head>
+<body {% if rate_limited %}data-rate-limited="true"{% endif %}>
+
+
+    {% if rate_limited %}
+    <div class="alert alert-premium-warning text-center mx-3 mt-3 shadow-lg">
+        <i class="fas fa-clock me-2"></i>Çok fazla istek; Instagram geçici sınır koydu. Lütfen 10–15 dakika bekleyip tekrar deneyin.
+    </div>
+    {% endif %}
+    {% if error_message %}
+    <div class="alert alert-premium-warning text-center mx-3 mt-3 shadow-lg" style="background: rgba(196, 149, 106, 0.15); border-color: rgba(196, 149, 106, 0.35); color: #f5ede4;">
+        <i class="fas fa-exclamation-triangle me-2" style="color: var(--accent-caramel);"></i>{{ error_message }}
+    </div>
+    {% endif %}
+
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-12 col-md-10 col-lg-8 col-xl-7">
+                <div class="result-card">
+                    {% include '_worker_status.html' %}
+                    {% if is_loading %}
+                    <div class="loading-screen-container">
+                        <div class="loading-screen-card">
+                            <div class="loading-coffee-badge">
+                                <i class="fas fa-mug-hot"></i>
+                            </div>
+                            
+                            <h2 class="loading-title">Denetim Sürüyor...</h2>
+                            
+                            <div class="loading-status-pill">
+                                <span class="loading-status-dot"></span>
+                                <span id="loading-message">{{ message }}</span>
+                            </div>
+                            
+                            <!-- High Tech Progress Bar -->
+                            <div class="luxury-progress-wrap">
+                                <div class="luxury-progress-track">
+                                    <div class="luxury-progress-fill" 
+                                         id="loading-progress-bar"
+                                         style="width: {{ progress }}%;" 
+                                         aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="loading-percent-badge">
+                                <i class="fas fa-hourglass-half"></i>
+                                <span id="loading-percent">%{{ progress }} Tamamlandı</span>
+                            </div>
+                            {% if can_cancel %}
+                            <form class="cancel-job-form" method="post" action="{{ url_for('history.cancel', job_id=post_code) }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button class="result-action-btn primary" type="submit">Denetimi İptal Et</button>
+                                <small>Gönderilmiş mesajlar geri alınmaz.</small>
+                            </form>
+                            {% endif %}
+
+                        </div>
+                    {% else %}
+                    <div class="result-header-wrap text-center mb-4">
+                        <div class="result-header-badge">
+                            <i class="fas fa-chart-pie"></i>
+                            <span>{% if check_likes %}Beğeni Denetim Raporu{% else %}Yorum Denetim Raporu{% endif %}</span>
+                        </div>
+                        <h1 class="result-header-title">
+                            {% if check_likes %}Beğeni Durumu Özeti{% else %}Yorum Durumu Özeti{% endif %}
+                        </h1>
+                        <!-- Hızlı Güncelle / Yeniden Tarama Butonları -->
+                        <div class="result-top-actions">
+                            <a href="{{ url_for('history.index') }}" class="result-action-btn primary">Denetim Geçmişi</a>
+                            <button type="button" class="result-action-btn primary" onclick="triggerRecheck(true)">
+                                <i class="fas fa-bolt"></i>
+                                <span>Hızlı Güncelle (Eksikler)</span>
+                            </button>
+                            <button type="button" class="result-action-btn primary" onclick="triggerRecheck(false)">
+                                <i class="fas fa-sync-alt"></i>
+                                <span>Tam Yeniden Tara</span>
+                            </button>
+                            <div id="togglePostSelectorBtnWrapper" style="display: none;">
+                                <button type="button" class="result-action-btn primary" onclick="window.togglePostSelectorCard()">
+                                    <i class="fas fa-exchange-alt"></i>
+                                    <span>Paylaşımı Değiştir</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Anlık Paylaşım Değiştirici (Animasyonlu Kart) -->
+                    <div id="resultPostSelectorContainer" style="display: none;" class="mb-4">
+                        <div class="sortable-main-card">
+                            <div class="eksikler-section-header" onclick="togglePostSelectorCard()">
+                                <div class="d-flex justify-content-between align-items-center w-100">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="header-title-icon-box" style="background: rgba(196, 149, 106, 0.15); color: #f5ede4;">
+                                            <i class="fas fa-exchange-alt"></i>
+                                        </div>
+                                        <div class="header-text-container">
+                                            <div class="d-flex align-items-center flex-wrap gap-2">
+                                                <strong class="header-title-main">
+                                                    Kontrol Edilen Paylaşımı Değiştir
+                                                </strong>
+                                                <span class="badge badge-accent-outline" style="font-size: 11.5px;">Grup Gönderileri</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex justify-content-end align-items-center flex-shrink-0 ps-1">
+                                        <i id="postSelectorChevron" class="fas fa-chevron-down chevron-icon"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="resultPostSelectorBody" class="result-section-content collapsed">
+                                <div class="custom-dropdown" id="resultPostDropdown">
+                                    <button type="button" class="dropdown-trigger" onclick="toggleResultDropdown('resultPostDropdown')">
+                                        <span class="dropdown-text" id="resultPostDropdownText">-- Paylaşım Yükleniyor... --</span>
+                                        <i class="fas fa-chevron-down dropdown-arrow"></i>
+                                    </button>
+                                    <div class="dropdown-menu">
+                                        <input type="text" class="dropdown-search" placeholder="Paylaşım ara..." onkeyup="filterResultDropdown('resultPostDropdown', this.value)">
+                                        <div class="dropdown-options" id="resultPostDropdownOptions"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="sortable-cards-container">
+                    {% for item in links %}
+                    <div class="mb-4 sortable-main-card">
+                        <div class="eksikler-section-header" data-index="{{ loop.index }}" onclick="toggleEksiklerSection(this.dataset.index)">
+                            <div class="d-flex justify-content-between align-items-center w-100">
+                                <div class="d-flex align-items-center gap-3">
+                                    <i class="fas fa-grip-vertical drag-handle" title="Tut ve Sürükle" onclick="event.stopPropagation()"></i>
+                                    <div class="header-title-icon-box eksikler-icon-box">
+                                        <i class="fas fa-user-clock"></i>
+                                    </div>
+                                    <div class="header-text-container">
+                                        <div class="d-flex align-items-center flex-wrap gap-2">
+                                            <strong class="header-title-main">
+                                                {% if check_likes %}Beğenmeyenler{% else %}Eksikler{% endif %}
+                                            </strong>
+                                            <span id="elemanSayisi-{{ loop.index }}" class="badge badge-accent-outline"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="d-flex justify-content-end align-items-center flex-shrink-0 ps-1">
+                                    <i id="eksiklerIcon-{{ loop.index }}" class="fas fa-chevron-down chevron-icon"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="eksikler-meta-strip mt-3" onclick="event.stopPropagation()">
+                                {% if item.sender %}
+                                <span class="badge badge-indigo-outline">
+                                    <i class="fas fa-user-circle me-1"></i><span class="meta-label">Gönderi Sahibi:</span>@{{ item.sender }}
+                                </span>
+                                {% endif %}
+                                
+                                <a href="{{ item.post_link }}" target="_blank" class="btn btn-sm btn-link-action" title="Linke Git">
+                                    <i class="fas fa-external-link-alt"></i><span>Link</span>
+                                </a>
+                                
+                                <button type="button" class="btn btn-sm btn-copy-action" data-link="{{ item.post_link }}" onclick="window.copyLink(this.dataset.link)" title="Linki kopyala">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                                
+                                <button type="button" class="btn btn-sm btn-info-action" onclick="window.showPostDetailsModal('{{ loop.index }}')" title="Gönderi Detayları">
+                                    <i class="fas fa-info-circle"></i><span>Detaylar</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="eksiklerSection-{{ loop.index }}" class="result-section-content collapsed">
+                            {% if item.error %}
+                            <div class="alert alert-danger mb-0" style="background: rgba(196, 149, 106, 0.15); border: 1px solid rgba(196, 149, 106, 0.35); color: #f5ede4; padding: 15px; border-radius: 8px;">
+                                <i class="fas fa-exclamation-triangle me-2" style="color: var(--accent-caramel);"></i>{{ item.error }}
+                            </div>
+                            {% else %}
+                            <div class="search-container mb-3">
+                                <i class="fas fa-search search-icon"></i>
+                                <input type="text" placeholder="Bu link için kullanıcı ara..." 
+                                       class="search-input" data-index="{{ loop.index }}" onkeyup="filterEksiklerList(this.dataset.index)">
+                            </div>
+
+                            <button type="button" class="btn btn-copy-eksikler mb-3" data-index="{{ loop.index }}" onclick="window.copyEksiklerList(this.dataset.index)">
+                                <i class="fas fa-copy me-2"></i>Bu Link İçin Eksikleri Kopyala
+                            </button>
+
+                            <ul class="list-group list-group-flush eksikler-list"
+                                id="eksiklerListesi-{{ loop.index }}"
+                                data-post-link="{{ item.post_link }}">
+                                {% for eksik in item.eksikler %}
+                                <li class="list-group-item" data-username="{{ eksik }}">
+                                    <span class="username-text">
+                                        <i class="fas fa-grip-vertical drag-handle-inner me-2" style="color: var(--muted-foreground); cursor: grab;"></i>
+                                        <i class="fas fa-user me-2" style="color: var(--accent-caramel);"></i><strong>{{ eksik }}</strong>
+                                    </span>
+                                    <button class="btn btn-exemption" data-user="{{ eksik }}" data-link="{{ item.post_link }}" onclick="window.addExemption(this.dataset.user, this.dataset.link, this)" title="İzin Ver">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                    {% if all_commented and all_commented|length > 0 %}
+                    <div class="mb-4 sortable-main-card">
+                        <div class="completed-section-header" onclick="toggleCompletedSection()">
+                            <div class="d-flex justify-content-between align-items-center w-100">
+                                <div class="d-flex align-items-center gap-3">
+                                    <i class="fas fa-grip-vertical drag-handle" title="Tut ve Sürükle" onclick="event.stopPropagation()"></i>
+                                    <div class="header-title-icon-box completed-icon-box">
+                                        <i class="fas fa-user-check"></i>
+                                    </div>
+                                    <div class="header-text-container">
+                                        <div class="d-flex align-items-center flex-wrap gap-2">
+                                            <strong class="header-title-main">
+                                                {% if check_likes %}Beğenenler{% else %}Yorum Yazanlar{% endif %}
+                                            </strong>
+                                            <span class="badge badge-success-outline">
+                                                {{ all_commented|length }} kişi
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="d-flex justify-content-end align-items-center flex-shrink-0 ps-1">
+                                    <i id="completedSectionIcon" class="fas fa-chevron-down chevron-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="completedSection" class="result-section-content collapsed">
+                            <div class="search-container mb-3">
+                                <i class="fas fa-search search-icon"></i>
+                                <input type="text" id="completedSearchInput" placeholder="Kullanıcı adı ara..." 
+                                       class="search-input" onkeyup="filterCompletedList()">
+                            </div>
+                            <button type="button" class="btn btn-copy-eksikler mb-3" onclick="window.copyCompletedList()">
+                                <i class="fas fa-copy me-2"></i>Tamamlamış Listeyi Kopyala
+                            </button>
+                            <ul class="list-group list-group-flush" id="completedList">
+                                {% for user in all_commented %}
+                                <li class="list-group-item" data-username="{{ user }}">
+                                    <div class="d-flex align-items-center justify-content-between w-100">
+                                        <span class="username-text">
+                                            <i class="fas fa-grip-vertical drag-handle-inner me-2" style="color: var(--muted-foreground); cursor: grab;"></i>
+                                            <i class="fas fa-user-check me-2" style="color: var(--accent-caramel);"></i><strong>{{ user }}</strong>
+                                            {% if user_comments and user_comments.get(user) and not check_likes %}
+                                             <span class="comment-preview-inline" style="color: var(--muted-foreground); font-size: 13px; font-style: italic; margin-left: 8px; opacity: 0.85;" title="Kullanıcının yazdığı yorum">
+                                                - "{{ user_comments.get(user)[0] }}"
+                                            </span>
+                                            {% endif %}
+                                        </span>
+                                        {% if duplicate_comment_users and user in duplicate_comment_users %}
+                                        <span class="badge badge-warning-outline" title="Bu kullanıcı birden fazla postta aynı yorumu kullanmış!">
+                                            <i class="fas fa-clone me-1"></i>Kopya Yorum
+                                        </span>
+                                        {% endif %}
+                                        {% if invalid_comment_users and user in invalid_comment_users and not check_likes %}
+                                        <span class="badge" style="border: 1px solid rgba(196, 149, 106, 0.4) !important; color: #f5ede4 !important; background: rgba(196, 149, 106, 0.18) !important; padding: 4px 8px; border-radius: 6px; font-weight: 600;" title="Kural İhlali: Yorum en az 2 kelime ve 1 emoji içermelidir!">
+                                            <i class="fas fa-exclamation-circle me-1" style="color: var(--accent-caramel);"></i>Format Dışı
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if user_missing_posts and links|length > 1 %}
+                    <div class="mb-4 sortable-main-card">
+                        <div class="detayli-rapor-header" onclick="window.toggleDetayliRapor()">
+                            <div class="d-flex justify-content-between align-items-center w-100">
+                                <div class="d-flex align-items-center gap-3">
+                                    <i class="fas fa-grip-vertical drag-handle" title="Tut ve Sürükle" onclick="event.stopPropagation()"></i>
+                                    <div class="header-title-icon-box report-icon-box">
+                                        <i class="fas fa-clipboard-list"></i>
+                                    </div>
+                                    <div class="header-text-container">
+                                        <div class="d-flex align-items-center flex-wrap gap-2">
+                                            <strong class="header-title-main">
+                                                Detaylı Rapor
+                                            </strong>
+                                            <span class="badge badge-accent-outline">
+                                                {{ user_missing_posts|length }} eksik kullanıcı
+                                            </span>
+                                        </div>
+                                        <div style="color: var(--muted-foreground); font-size: 12.5px; margin-top: 2px;">
+                                            Eksik kullanıcıların kaç gönderide eksik olduğu listesi
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="d-flex justify-content-end align-items-center flex-shrink-0 ps-1">
+                                    <i id="detayliRaporIcon" class="fas fa-chevron-down chevron-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="detayliRaporContent" class="result-section-content collapsed">
+                        {% for username, posts in user_missing_posts.items() %}
+                        <div class="user-detail-card mb-3">
+                             <div class="p-3" style="cursor: pointer;" onclick="window.toggleUserMissingPosts('{{ username }}', '{{ loop.index }}')">
+                                <div class="d-flex justify-content-between align-items-center w-100 user-detail-header">
+                                    <div class="header-text-container">
+                                        <div class="d-flex align-items-center flex-wrap gap-2">
+                                            <strong class="header-title-main">
+                                                <i class="fas fa-user-circle me-1" style="color: var(--accent-caramel);"></i>@{{ username }}
+                                            </strong>
+                                            <span class="badge badge-accent-outline">
+                                                <i class="fas fa-exclamation-circle me-1"></i>{{ posts|length }} eksik işlem
+                                            </span>
+                                        </div>
+                                        
+                                        <div class="d-flex align-items-center flex-wrap gap-2 mt-2">
+                                            <button type="button" class="btn btn-sm btn-copy-action" data-user="{{ username }}" onclick="event.stopPropagation(); window.copyUserMissingPosts(this.dataset.user)" title="Tüm Linkleri Kopyala">
+                                                <i class="fas fa-copy"></i><span class="d-none d-sm-inline ms-1" style="padding-left: 2px;">Tüm Linkleri Kopyala</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="d-flex justify-content-end align-items-center flex-shrink-0 ps-1">
+                                        <i id="user-icon-{{ loop.index }}" class="fas fa-chevron-down chevron-icon"></i>
+                                    </div>
+                                </div>
+                                
+                                <div id="missing-posts-{{ username }}" class="row g-2 mt-3 collapsed">
+                                    {% for post in posts %}
+                                    <div class="col-12">
+                                        <div class="post-link-item">
+                                            <div class="d-flex align-items-center gap-2 overflow-hidden">
+                                                <div class="instagram-icon-box">
+                                                    <i class="fab fa-instagram" style="color: var(--accent-caramel); font-size: 14px;"></i>
+                                                </div>
+                                                <a href="{{ post }}" target="_blank" onclick="event.stopPropagation();" class="post-link-anchor">
+                                                    {{ post }}
+                                                </a>
+                                            </div>
+                                            <button class="btn btn-sm" style="background: transparent; border: none; color: var(--muted-foreground); padding: 4px; flex-shrink: 0;" data-post="{{ post }}" onclick="event.stopPropagation(); window.copyToClipboard(this.dataset.post)" title="Kopyala" onmouseover="this.style.color='var(--accent-caramel)'" onmouseout="this.style.color='var(--muted-foreground)'">
+                                                <i class="fas fa-copy" style="font-size: 14px;"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Post Detay Modalı -->
+    <div id="postDetailsModal" class="modal-overlay" onclick="if (event.target.id === 'postDetailsModal') closePostDetailsModal();" style="z-index: 15000;">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 500px; padding: 28px;">
+            <div class="modal-header d-flex justify-content-between align-items-center mb-4" style="border-bottom: 1px solid rgba(196, 149, 106, 0.15); padding-bottom: 14px; margin-top: 0;">
+                <h3 style="color: var(--accent-caramel); font-size: 20px; font-weight: 700; margin: 0;"><i class="fas fa-info-circle me-2"></i>Paylaşım Detayları</h3>
+                <button type="button" class="btn-close-modal" onclick="closePostDetailsModal()" style="background: transparent; border: none; color: var(--accent-caramel); font-size: 24px; cursor: pointer; transition: color 0.2s; line-height: 1; padding: 0 5px;" onmouseover="this.style.color='var(--foreground)'" onmouseout="this.style.color='var(--accent-caramel)'">×</button>
+            </div>
+            
+            <div class="modal-body" style="color: var(--foreground); font-size: 14px;">
+                <div class="d-flex align-items-center mb-3" style="background: rgba(196, 149, 106, 0.05); border: 1px solid rgba(196, 149, 106, 0.15); padding: 12px 16px; border-radius: 12px; gap: 14px;">
+                    <div id="modalPostAvatarWrap" style="width: 48px; height: 48px; min-width: 48px; border-radius: 50%; overflow: hidden; background: rgba(196, 149, 106, 0.12); border: 1.5px solid var(--accent-caramel); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                        <img id="modalPostAvatarImg" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;" referrerpolicy="no-referrer">
+                        <i id="modalPostAvatarIcon" class="fas fa-user-circle" style="font-size: 34px; color: var(--accent-caramel);"></i>
+                    </div>
+                    <div>
+                        <div style="font-weight: 700; color: #fff; font-size: 15px;" id="modalPostOwner">@username</div>
+                        <div style="font-size: 12px; color: var(--muted-foreground);" id="modalPostOwnerFullname">Ad Soyad</div>
+                    </div>
+                </div>
+
+                <!-- Paylaşım Görseli / Reels Video Oynatıcı -->
+                <div id="modalPostMediaWrap" class="mb-3" style="display: none; position: relative; border-radius: 16px; overflow: hidden; background: #000; border: 1px solid rgba(196, 149, 106, 0.35); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); text-align: center; max-height: 420px;">
+                    <!-- Fotoğraf Görseli (Aspect ratio korunur, bozulmaz) -->
+                    <img id="modalPostThumbnailImg" src="" style="width: 100%; max-height: 400px; object-fit: contain; display: block; margin: 0 auto; background: #000;" referrerpolicy="no-referrer">
+                    
+                    <!-- Reels / Video Oynatıcı -->
+                    <video id="modalPostVideoPlayer" playsinline controls style="width: 100%; max-height: 420px; display: none; object-fit: contain; background: #000; outline: none;"></video>
+                    
+                    <!-- Medya Rozeti (Reels / Fotoğraf) -->
+                    <div id="modalPostMediaBadge" style="position: absolute; top: 10px; right: 12px; background: rgba(10, 8, 6, 0.85); backdrop-filter: blur(8px); padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; color: #f5ede4; border: 1px solid rgba(196, 149, 106, 0.35); display: flex; align-items: center; gap: 5px; z-index: 5; pointer-events: none;">
+                        <i id="modalPostMediaBadgeIcon" class="fas fa-camera" style="color: var(--accent-caramel);"></i> 
+                        <span id="modalPostMediaBadgeText">Gönderi</span>
+                    </div>
+
+                    <!-- Büyük Oynat Butonu (Reels / Video İçin) -->
+                    <div id="modalPostPlayOverlay" onclick="playModalVideo()" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; align-items: center; justify-content: center; background: rgba(0,0,0,0.35); cursor: pointer; transition: background 0.2s; z-index: 4;">
+                        <div style="width: 62px; height: 62px; border-radius: 50%; background: linear-gradient(135deg, #c4956a 0%, #8b6d4e 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 30px rgba(196, 149, 106, 0.8); transition: transform 0.2s;">
+                            <i class="fas fa-play" style="color: #0d0a08; font-size: 22px; margin-left: 4px;"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-6">
+                        <div class="stat-interactive-card" onclick="openInteractionsModal('likes')" title="Beğenenleri Listele" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); padding: 14px; border-radius: 12px; text-align: center; cursor: pointer; transition: all 0.25s ease;">
+                            <div style="color: var(--accent-caramel); font-size: 20px; font-weight: 700; margin-bottom: 4px;" id="modalPostLikes">0</div>
+                            <div style="color: var(--muted-foreground); font-size: 12px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                                <i class="fas fa-heart" style="color: #ef4444;"></i> Beğeni 
+                                <i class="fas fa-chevron-right ms-1" style="font-size: 9px; opacity: 0.6;"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stat-interactive-card" onclick="openInteractionsModal('comments')" title="Yorumları Listele" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); padding: 14px; border-radius: 12px; text-align: center; cursor: pointer; transition: all 0.25s ease;">
+                            <div style="color: var(--accent-caramel); font-size: 20px; font-weight: 700; margin-bottom: 4px;" id="modalPostComments">0</div>
+                            <div style="color: var(--muted-foreground); font-size: 12px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                                <i class="fas fa-comment" style="color: #3b82f6;"></i> Yorum 
+                                <i class="fas fa-chevron-right ms-1" style="font-size: 9px; opacity: 0.6;"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="font-weight: 600; color: var(--accent-caramel); display: block; margin-bottom: 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;"><i class="fas fa-quote-left me-1"></i>Paylaşım Açıklaması:</label>
+                    <div id="modalPostCaption" style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border); border-radius: 12px; padding: 14px; max-height: 150px; overflow-y: auto; color: rgba(255,255,255,0.95); font-style: italic; line-height: 1.6; font-size: 13px; white-space: pre-wrap; word-break: break-word;"></div>
+                </div>
+
+                <div style="text-align: center; margin-top: 24px;">
+                    <a id="modalPostLinkBtn" href="#" target="_blank" class="btn btn-primary" style="background: var(--accent-caramel); border-color: var(--accent-caramel); color: #0d0a08; font-weight: 600; padding: 10px 24px; border-radius: 12px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s;">
+                        <i class="fas fa-external-link-alt"></i>Instagram'da Göster
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Beğeni / Yorum Listeleme Modalı -->
+    <div id="interactionsModal" class="modal-overlay" onclick="if (event.target.id === 'interactionsModal') closeInteractionsModal();" style="z-index: 16000;">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 520px; padding: 24px; max-height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-header d-flex justify-content-between align-items-center mb-3" style="border-bottom: 1px solid rgba(196, 149, 106, 0.15); padding-bottom: 12px; margin-top: 0;">
+                <div class="d-flex align-items-center gap-2">
+                    <span id="interactionsModalIcon" style="font-size: 20px;">💬</span>
+                    <h3 id="interactionsModalTitle" style="color: var(--accent-caramel); font-size: 18px; font-weight: 700; margin: 0;">Yorumlar (0)</h3>
+                </div>
+                <button type="button" class="btn-close-modal" onclick="closeInteractionsModal()" style="background: transparent; border: none; color: var(--accent-caramel); font-size: 24px; cursor: pointer; line-height: 1; padding: 0 5px;" onmouseover="this.style.color='var(--foreground)'" onmouseout="this.style.color='var(--accent-caramel)'">×</button>
+            </div>
+            
+            <div class="search-container mb-3" style="position: relative;">
+                <i class="fas fa-search search-icon" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--accent-caramel); font-size: 13px;"></i>
+                <input type="text" id="interactionsSearchInput" placeholder="Kullanıcı veya içerik ara..." 
+                       class="search-input" style="width: 100%; padding: 9px 14px 9px 38px; border-radius: 10px; background: rgba(0,0,0,0.35); border: 1px solid var(--border); color: #fff; font-size: 13px;" onkeyup="filterInteractionsList()">
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+                <span id="interactionsCountBadge" class="badge badge-accent-outline" style="font-size: 11.5px;">0 Kayıt</span>
+                <button type="button" class="btn btn-sm" onclick="copyInteractionsList()" style="background: rgba(196, 149, 106, 0.15); border: 1px solid rgba(196, 149, 106, 0.35); color: #f5ede4; border-radius: 8px; font-size: 11.5px; font-weight: 600; padding: 4px 10px; display: inline-flex; align-items: center; gap: 5px;">
+                    <i class="fas fa-copy"></i> Listeyi Kopyala
+                </button>
+            </div>
+
+            <!-- Scrollable Content List -->
+            <div id="interactionsListContainer" style="overflow-y: auto; flex-grow: 1; padding-right: 4px; max-height: 400px; min-height: 120px;">
+                <!-- Dinamik Elemanlar -->
+            </div>
+        </div>
+    </div>
+
+    <!-- İlerleme overlay -->
+    <div id="progressOverlay" class="modal-overlay" style="display: none; align-items: center; justify-content: center; z-index: 20000;">
+        <div class="modal-card text-center" style="max-width: 400px; width: 90%; background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; box-shadow: var(--shadow-premium);">
+            <div class="modal-title" style="color: var(--accent-caramel); font-size: 18px; font-weight: 600; margin-bottom: 12px;">
+                <i class="fas fa-spinner fa-spin me-2"></i>Paylaşım Analiz Ediliyor
+            </div>
+            <div class="modal-text" id="progressText" style="color: var(--muted-foreground); font-size: 14px; margin-bottom: 15px;">
+                Yeni paylaşımın güncel verileri sorgulanıyor, lütfen bekleyin...
+            </div>
+            <div class="progress mt-2" style="height: 8px; background: rgba(255,255,255,0.1); border-radius: 8px; overflow: hidden;">
+                <div id="progressBar" class="progress-bar" role="progressbar" style="width: 100%; background: var(--accent-caramel); border-radius: 8px;" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gizli POST Gönderim Formu -->
+    <form id="resultRefreshForm" method="post" action="/" style="display: none;">
+        <input type="hidden" name="post_link" id="refreshPostLink" value="">
+        <input type="hidden" name="grup_uye" id="refreshGrupUye" value="{{ group|join(' ') }}">
+        <input type="hidden" name="thread_id" id="refreshThreadId" value="{{ thread_id }}">
+        <input type="hidden" name="check_likes" id="refreshCheckLikes" value="{% if check_likes %}on{% endif %}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
+
+    <!-- Bildirim -->
+    <div id="notification" class="notification">
+        <i class="fas fa-check-circle"></i>
+        <span id="notification-message"></span>
+    </div>
+
+    <!-- İzin Süresi Belirleme Modalı -->
+    <div id="confirmModal" class="modal-overlay" onclick="if(event.target === this) closeModal()">
+        <div class="modal-content exemption-duration-modal">
+            <div class="modal-header">
+                <div class="modal-header-icon-box">
+                    <i class="fas fa-calendar-alt"></i>
+                </div>
+                <div>
+                    <h3 style="margin: 0; font-size: 17.5px; font-weight: 700; color: #fff;">İzin Süresini Belirleyin</h3>
+                    <div style="font-size: 12px; color: var(--muted-foreground); margin-top: 2px;">Muafiyet süresini seçin veya özel gün girin</div>
+                </div>
+                <button type="button" class="btn-modal-close" onclick="closeModal()" title="Kapat">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body" style="padding: 0; margin-bottom: 20px;">
+                <!-- Seçili Kullanıcı Rozeti -->
+                <div class="exemption-target-user-card">
+                    <div class="user-avatar-mini">
+                        <i class="fas fa-user-shield"></i>
+                    </div>
+                    <div class="user-info-text">
+                        <span class="user-badge-label">İzin Verilecek Üye</span>
+                        <strong class="modal-username" id="modalUsername">@kullanici</strong>
+                    </div>
+                </div>
+
+                <!-- Süre Seçim Hapları (Duration Options) -->
+                <label class="duration-section-label">
+                    <i class="fas fa-hourglass-half"></i> İzin Geçerlilik Süresi:
+                </label>
+                
+                <div class="duration-options-grid">
+                    <button type="button" class="duration-pill active" data-days="0" onclick="selectExemptionDuration(0, this)">
+                        <i class="fas fa-file-alt"></i>
+                        <span>Bu Post</span>
+                        <small>Tek Sefer</small>
+                    </button>
+                    <button type="button" class="duration-pill" data-days="1" onclick="selectExemptionDuration(1, this)">
+                        <i class="fas fa-calendar-day"></i>
+                        <span>1 Gün</span>
+                        <small>24 Saat</small>
+                    </button>
+                    <button type="button" class="duration-pill" data-days="2" onclick="selectExemptionDuration(2, this)">
+                        <i class="fas fa-calendar-day"></i>
+                        <span>2 Gün</span>
+                        <small>48 Saat</small>
+                    </button>
+                    <button type="button" class="duration-pill" data-days="3" onclick="selectExemptionDuration(3, this)">
+                        <i class="fas fa-calendar-week"></i>
+                        <span>3 Gün</span>
+                        <small>72 Saat</small>
+                    </button>
+                    <button type="button" class="duration-pill" data-days="5" onclick="selectExemptionDuration(5, this)">
+                        <i class="fas fa-calendar-week"></i>
+                        <span>5 Gün</span>
+                        <small>Haftaiçi</small>
+                    </button>
+                    <button type="button" class="duration-pill" data-days="7" onclick="selectExemptionDuration(7, this)">
+                        <i class="fas fa-calendar-check"></i>
+                        <span>7 Gün</span>
+                        <small>1 Hafta</small>
+                    </button>
+                    <button type="button" class="duration-pill" data-days="15" onclick="selectExemptionDuration(15, this)">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>15 Gün</span>
+                        <small>Yarım Ay</small>
+                    </button>
+                    <button type="button" class="duration-pill" data-days="30" onclick="selectExemptionDuration(30, this)">
+                        <i class="fas fa-calendar"></i>
+                        <span>30 Gün</span>
+                        <small>1 Ay</small>
+                    </button>
+                    <button type="button" class="duration-pill" data-days="custom" onclick="selectExemptionDuration('custom', this)">
+                        <i class="fas fa-edit"></i>
+                        <span>Özel</span>
+                        <small>Gün Gir</small>
+                    </button>
+                </div>
+
+                <!-- Özel Gün Giriş Alanı (Gizli Başlar) -->
+                <div id="customDurationBox" class="custom-duration-wrapper" style="display: none;">
+                    <div class="custom-duration-input-wrap">
+                        <span class="custom-duration-prefix"><i class="fas fa-clock"></i></span>
+                        <input type="number" id="customDaysInput" min="1" max="365" placeholder="Kaç gün izin verilsin? (Örn: 4)" class="custom-duration-input" oninput="updateCustomDaysNote(this.value)">
+                        <span class="custom-duration-suffix">Gün</span>
+                    </div>
+                </div>
+
+                <!-- Bilgi / Özet Kutusu -->
+                <div class="exemption-summary-box" id="exemptionSummaryBox">
+                    <i class="fas fa-info-circle"></i>
+                    <span id="exemptionSummaryText">Bu üye <strong>sadece seçili gönderi</strong> için izinli sayılacaktır.</span>
+                </div>
+            </div>
+
+            <div class="modal-buttons">
+                <button type="button" class="modal-btn modal-btn-cancel" onclick="closeModal()">
+                    <i class="fas fa-times me-1"></i>Vazgeç
+                </button>
+                <button type="button" id="confirmExemptionBtn" class="modal-btn modal-btn-confirm" onclick="confirmExemption()">
+                    <i class="fas fa-check me-1"></i>İzin Ver
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var el = document.getElementById('sortable-cards-container');
+            if (el) {
+                new Sortable(el, {
+                    animation: 500,
+                    handle: '.drag-handle',
+                    easing: "cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+                    ghostClass: 'sortable-ghost',
+                    dragClass: 'sortable-drag',
+                    forceFallback: true, // Prevents default HTML5 semi-transparent drag image
+                    fallbackClass: 'sortable-drag',
+                    fallbackOnBody: true, // MUST BE TRUE to prevent off-screen coordinates
+                    axis: 'y', // Lock drag to vertical movement only
+                    onStart: function(evt) {
+                        document.body.classList.add('is-dragging');
+                    },
+                    onEnd: function(evt) {
+                        document.body.classList.remove('is-dragging');
+                    }
+                });
+            }
+
+            // Inner lists (Eksikler and Tamamlayanlar)
+            var innerLists = document.querySelectorAll('.eksikler-list, #completedList');
+            innerLists.forEach(function(list) {
+                new Sortable(list, {
+                    animation: 500,
+                    handle: '.drag-handle-inner',
+                    easing: "cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+                    ghostClass: 'sortable-ghost-inner',
+                    dragClass: 'sortable-drag-inner',
+                    forceFallback: true,
+                    fallbackClass: 'sortable-drag-inner',
+                    fallbackOnBody: true,
+                    axis: 'y'
+                });
+            });
+        });
+    </script>
+
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="mobile-bottom-nav">
+        <a href="/" class="nav-item">
+            <i class="fas fa-home"></i>
+            <span>Anasayfa</span>
+        </a>
+        <a href="/token_al" class="nav-item">
+            <i class="fas fa-key"></i>
+            <span>Token Al</span>
+        </a>
+        <a href="/admin" class="nav-item">
+            <i class="fas fa-user-shield"></i>
+            <span>Admin Panel</span>
+        </a>
+    </nav>
+
+    <!-- Yorum Gösterim Modalı -->
+    <div id="commentDetailModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <i class="fas fa-comment-alt"></i>
+                <span>Yazılan Yorum</span>
+            </div>
+            <div class="modal-body">
+                <div id="commentModalWarning" class="alert alert-danger" style="display: none; background: rgba(196, 149, 106, 0.15); border: 1px solid rgba(196, 149, 106, 0.35); color: #f5ede4; padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 15px;">
+                    <i class="fas fa-exclamation-triangle me-2" style="color: var(--accent-caramel);"></i><strong>Format Hatası:</strong> Bu yorum kurallara (en az 2 kelime + 1 emoji) uymamaktadır!
+                </div>
+                <div style="font-weight: 600; margin-bottom: 12px; color: var(--accent-cream);">
+                    @<span id="commentModalUsername"></span> kullanıcısının yorumu:
+                </div>
+                <blockquote id="commentModalContent" style="background: rgba(255, 255, 255, 0.02); border-left: 4px solid var(--accent-mocha); padding: 12px 16px; margin: 0; font-style: italic; border-radius: 0 8px 8px 0; color: var(--muted-foreground); white-space: pre-wrap; word-break: break-word; font-size: 14px; line-height: 1.5;">
+                </blockquote>
+            </div>
+            <div class="modal-buttons" style="display: flex; justify-content: flex-end;">
+                <button type="button" class="modal-btn modal-btn-confirm" onclick="closeCommentModal()" style="min-width: 100px;">Kapat</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.postCode = "{{ post_code if post_code else '' }}";
+        
+        function triggerRecheck(onlyMissing) {
+            if (!window.postCode) return;
+            
+            const btnBolt = document.querySelector('button[onclick="triggerRecheck(true)"]');
+            const btnSync = document.querySelector('button[onclick="triggerRecheck(false)"]');
+            
+            if (btnBolt) btnBolt.disabled = true;
+            if (btnSync) btnSync.disabled = true;
+            
+            fetch(`/api/recheck/${window.postCode}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({ only_missing: onlyMissing })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.assign(data.result_url);
+                } else {
+                    alert(data.message || "Güncelleme başlatılamadı.");
+                    if (btnBolt) btnBolt.disabled = false;
+                    if (btnSync) btnSync.disabled = false;
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("İletişim hatası oluştu.");
+                if (btnBolt) btnBolt.disabled = false;
+                if (btnSync) btnSync.disabled = false;
+            });
+        }
+
+        {% if is_loading %}
+        document.addEventListener('DOMContentLoaded', () => {
+            startResultPolling(window.postCode);
+        });
+        {% endif %}
+
+        window.resultThreadId = "{{ thread_id if thread_id else '' }}";
+        window.checkedPostUrl = "{{ links[0].post_link if links and links|length > 0 else '' }}";
+        window.userComments = {{ user_comments | tojson | safe if user_comments else '{}' }};
+        window.invalidCommentUsers = {{ invalid_comment_users | tojson | safe if invalid_comment_users else '[]' }};
+        
+        window.postDetailsData = {};
+        {% for item in links %}
+        window.postDetailsData["{{ loop.index }}"] = {
+            sender: "{{ item.sender or '' }}",
+            owner_fullname: "{{ item.owner_fullname or '' }}",
+            profile_pic_url: {{ (item.profile_pic_url or '') | tojson | safe }},
+            thumbnail_url: {{ (item.thumbnail_url or '') | tojson | safe }},
+            is_video: {{ 'true' if item.is_video else 'false' }},
+            video_url: {{ (item.video_url or '') | tojson | safe }},
+            like_count: {{ item.like_count or 0 }},
+            comment_count: {{ item.comment_count or 0 }},
+            caption: {{ (item.caption or '') | tojson | safe }},
+            comments_list: {{ (item.comments_list or []) | tojson | safe }},
+            likers_list: {{ (item.likers_list or []) | tojson | safe }},
+            link: "{{ item.post_link }}"
+        };
+        {% endfor %}
+    </script>
+
+    {% if is_loading %}
+    <script src="{{ url_for('static', filename='js/result_polling.js') }}"></script>
+    {% else %}
+    <script src="{{ url_for('static', filename='js/result.js') }}"></script>
+    {% endif %}
+    
+    <!-- Page Transition Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('csrf_expired')) {
+                setTimeout(function() {
+                    if (window.showNotification) {
+                        window.showNotification("Güvenlik anahtarınız yenilendi, lütfen işlemi tekrar deneyin.");
+                    } else {
+                        alert("Güvenlik anahtarınız yenilendi, lütfen işlemi tekrar deneyin.");
+                    }
+                }, 600);
+            }
+
+            document.querySelectorAll('a').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    if (this.target === '_blank' || !this.href || this.href.startsWith('javascript:') || this.getAttribute('href').startsWith('#') || this.hasAttribute('download') || this.onclick) return;
+                    if (this.hostname === window.location.hostname) {
+                        e.preventDefault();
+                        const targetUrl = this.href;
+                        document.body.classList.add('page-transitioning-out');
+                        setTimeout(() => {
+                            window.location.href = targetUrl;
+                        }, 350);
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>

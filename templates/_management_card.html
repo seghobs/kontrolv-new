@@ -1,0 +1,9 @@
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tools.css') }}">
+<a class="add-token-section management-card" href="{{ url_for('history.tools_page') }}">
+    <div class="section-header">
+        <h2><i class="fas fa-sliders" aria-hidden="true"></i> Denetim Araçları</h2>
+        <i class="fas fa-chevron-right management-card-arrow" aria-hidden="true"></i>
+    </div>
+    <span id="managementNotice" class="management-card-notice" aria-live="polite"></span>
+</a>
+<script defer src="{{ url_for('static', filename='js/management_notice.js') }}"></script>
