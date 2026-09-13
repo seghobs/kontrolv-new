@@ -127,3 +127,37 @@ class SetupTests(unittest.TestCase):
         with self.assertRaises(setup.SetupError):setup.select_database(self.root)
         (self.root/'app.db').touch()
         with self.assertRaises(setup.SetupError):setup.select_database(self.root,str(self.root/'typo.db'))
+
+class CodeUpdateTests(unittest.TestCase):
+    def test_update_preserves_data_and_restores_code(self):
+        with tempfile.TemporaryDirectory() as root:
+            project = Path(root).resolve() / 'project'; project.mkdir()
+            backup = Path(root) / 'backup'; backup.mkdir()
+            original = {'flask_app.py': 'old', 'requirements.txt': '', 'obsolete.py': 'old module',
+                        'app.db': 'database', 'tokens.json': 'credentials', 'secret.key': 'secret',
+                        'custom.txt': 'custom', 'untracked.py': 'local extension'}
+            for name, value in original.items(): (project / name).write_text(value)
+            (project / setup.STATE_FILE).write_text(json.dumps({'managed_files': ['obsolete.py', 'app.db', '../outside.py']}))
+            def clone(args, **kwargs):
+                target = Path(args[-1]); (target / 'app_core').mkdir(parents=True)
+                for name in ('flask_app.py', 'requirements.txt', 'app_core/sqlite_schema.py'):
+                    (target / name).write_text('new')
+            with patch.object(setup, 'command', side_effect=clone), patch.object(setup.subprocess, 'check_output', return_value=b'flask_app.py\0requirements.txt\0app_core/sqlite_schema.py\0'):
+                files = setup.ensure_project(project, backup)
+            self.assertEqual((project / 'flask_app.py').read_text(), 'new')
+            self.assertFalse((project / 'obsolete.py').exists())
+            for name in ('app.db','tokens.json','secret.key','custom.txt','untracked.py'):
+                self.assertEqual((project / name).read_text(), original[name])
+            self.assertIn('app_core/sqlite_schema.py', files)
+            setup.restore_code(project, backup)
+            for name, value in original.items(): self.assertEqual((project / name).read_text(), value)
+            self.assertFalse((project / 'app_core/sqlite_schema.py').exists())
+
+    def test_failed_download_keeps_code(self):
+        with tempfile.TemporaryDirectory() as root:
+            project = Path(root).resolve(); backup = project / 'backup'; backup.mkdir()
+            (project / 'flask_app.py').write_text('old')
+            (project / 'requirements.txt').write_text('old')
+            with patch.object(setup, 'command', side_effect=OSError('network unavailable')):
+                with self.assertRaises(OSError): setup.ensure_project(project, backup)
+            self.assertEqual((project / 'flask_app.py').read_text(), 'old')

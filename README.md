@@ -81,7 +81,9 @@ curl -fsSL https://raw.githubusercontent.com/seghobs/kontrolv-new/main/setup.sh 
 bash /tmp/kontrol-setup.sh --path "$HOME/mysite"
 ```
 
-Kurulumun hedefi hesabınızın ana dizinindeki `mysite` klasörüdür. Bu klasör yoksa proje indirilir. Klasörde mevcut uygulama varsa o kod kullanılır; klasör silinmez veya zorla yenilenmez.
+Kurulumun hedefi hesabınızın ana dizinindeki `mysite` klasörüdür. Her çalıştırmada GitHub `main` dalındaki güncel kod indirilir. Mevcut veritabanı ve değiştirilecek kod önce yedeklenir; ardından uygulama dosyaları yenilenir. Git veya önceki kurulum kaydı tarafından tanınan, yeni sürümde kaldırılmış kod dosyaları temizlenir. Tanınmayan kişisel dosyalar korunur.
+
+**Veritabanı yerinde güncellenir:** mevcut `.db` silinmez, boş dosyayla değiştirilmez. Eksik tablolar, sütunlar ve indeksler eklenir; mevcut hesap, token, yorum ve denetim satırlarının değerleri değiştirilmez. Yeni sütunlara varsayılan değer atanabilir. Uyumsuz anahtar veya çakışan kayıt varsa veri silerek çözmek yerine şema değişikliği geri alınır ve kurulum durur. Kurulum tekrar çalıştırılabilir. İlk indirme ve paket kurulumu nedeniyle bir saniyelik tamamlanma garantisi yoktur.
 
 **Konsolu kapatmadan işlemin tamamlanmasını bekleyin.** Son satırda `Kurulum tamamlandı:` ve sitenizin adresi görünmelidir. Betik canlı sayfayı doğrulayamazsa başarı mesajı vermez.
 
@@ -294,24 +296,15 @@ Tarayıcıdan [http://127.0.0.1:3434](http://127.0.0.1:3434) adresini açın. İ
 <a id="guncelleme"></a>
 ## Güncelleme ve yedekleme
 
-### Git ile güncelleme
+### Tek komutla güncelleme
 
-Aşağıdaki adımlar, **bu depodan Git ile klonlanmış** kurulumlar içindir. Önce çalışan denetimlerin bitmesini bekleyin.
-
-```bash
-cd "$HOME/mysite"
-git remote get-url origin
-git status --short
-```
-
-Uzak depo `seghobs/kontrolv-new` olmalıdır. Yerel değişiklik varsa önce onları koruyun; `reset --hard` kullanmayın. Depo doğru ve çalışma alanı temizse:
+Git ile klonlanmış veya dosyaları elle yüklenmiş mevcut kurulumlarda aynı komutu kullanın. Önce çalışan denetimlerin bitmesini bekleyin.
 
 ```bash
-git pull --ff-only
-bash setup.sh
+curl -fsSL https://raw.githubusercontent.com/seghobs/kontrolv-new/main/setup.sh -o /tmp/kontrol-setup.sh && bash /tmp/kontrol-setup.sh --path "$HOME/mysite"
 ```
 
-Betik bağımlılıkları kontrol eder, veritabanını yedekler ve web uygulamasını yeniden yükler. Git geçmişi olmayan, dosyaları elle yüklenmiş kurulumlarda yalnız güncel kaynak dosyalarını aktarın; veritabanı ve anahtarların üzerine yazmayın.
+Betik bağımlılıkları kontrol eder, SQLite yapısını yerinde tamamlar ve web uygulamasını yeniden yükler. Uygulama kodundaki yerel düzenlemeler güncel sürümle değiştirilmeden önce `code/` yedeğine alınır. `.git`, `.venv`, veritabanları, token dosyaları ve anahtarlar temizlenmez. Kod veya kurulum adımı başarısız olursa eski kod geri yüklenir; veritabanının üzerine eski yedek yazılmaz. Canlı sayfa doğrulaması başarısız olursa hata bildirilir; hata günlüklerini kontrol edin.
 
 ### Yedekler nerede?
 
@@ -326,7 +319,7 @@ Betik bağımlılıkları kontrol eder, veritabanını yedekler ve web uygulamas
     └── static-mappings.json
 ```
 
-Bu klasör tam bir kaynak kod arşivi değildir; veritabanı ve kurulum yapılandırması yedeğidir. Yeni kurulumda henüz olmayan dosyaların yedeği bulunmaz.
+Ayrıca `code/` altında değiştirilen veya kaldırılan eski kodlar, `code-plan.json` içinde işlem listesi bulunur. Bu bir proje klasörü kopyası değildir; ilgisiz kişisel dosyalar yedeklenmez. Yeni kurulumda henüz olmayan dosyaların yedeği bulunmaz.
 
 Şifre, token, `.env`, `secret.key`, SQLite dosyaları ve yedekleri GitHub'a yüklemeyin. `.gitignore` bu dosyaların yaygın adlarını dışarıda tutar. Veritabanı dosyaları kendiliğinden şifrelenmez; dosya erişimini koruyun.
 
@@ -377,7 +370,7 @@ node tests/test_member_copy.mjs
 node tests/test_result_polling.cjs
 ```
 
-**Son doğrulama — 14 Eylül 2026:** 119 Python testi ve beş JavaScript test grubu başarılı. Kurulum testleri yedekleme, veri seçimi, şifre koruma, tekrar çalıştırma ve yapılandırma geri dönüşü senaryolarını kapsar. Bunlar canlı PythonAnywhere hesabında sıfırdan kurulmuş uçtan uca bir ortam testinin yerine geçmez.
+**Son doğrulama — 14 Eylül 2026:** 124 Python testi ve beş JavaScript test grubu başarılı. Kurulum testleri yedekleme, veri seçimi, şifre koruma, tekrar çalıştırma ve yapılandırma geri dönüşü senaryolarını kapsar. Bunlar canlı PythonAnywhere hesabında sıfırdan kurulmuş uçtan uca bir ortam testinin yerine geçmez.
 
 Test keşfini `tests` diziniyle sınırlandırın. Yerel deneme dosyaları üretim test paketine dahil değildir.
 

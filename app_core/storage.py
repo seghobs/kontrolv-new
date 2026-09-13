@@ -38,128 +38,8 @@ def _json_read(path, default):
         return default
 
 def _init_db(conn):
-    from app_core.jobs import init_schema
+    from app_core.sqlite_schema import init_schema
     init_schema(conn)
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS tokens (
-            username TEXT PRIMARY KEY,
-            full_name TEXT DEFAULT '',
-            password TEXT DEFAULT '',
-            token TEXT DEFAULT '',
-            android_id_yeni TEXT DEFAULT '',
-            user_agent TEXT DEFAULT '',
-            device_id TEXT DEFAULT '',
-            is_active INTEGER DEFAULT 1,
-            added_at TEXT DEFAULT '',
-            logout_reason TEXT DEFAULT '',
-            logout_time TEXT DEFAULT '',
-            deleted_at TEXT DEFAULT '',
-            relogin_attempts INTEGER DEFAULT 0,
-            last_relogin_failed_at TEXT DEFAULT ''
-        )
-        """
-    )
-    try:
-        conn.execute("ALTER TABLE tokens ADD COLUMN last_relogin_failed_at TEXT DEFAULT ''")
-    except Exception:
-        pass
-
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS exemptions (
-            post_link TEXT NOT NULL,
-            username TEXT NOT NULL,
-            PRIMARY KEY (post_link, username)
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS global_exemptions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            created_at TEXT NOT NULL,
-            expires_at TEXT DEFAULT NULL,
-            duration_days INTEGER DEFAULT 0
-        )
-        """
-    )
-    try:
-        conn.execute("ALTER TABLE global_exemptions ADD COLUMN expires_at TEXT DEFAULT NULL")
-    except Exception:
-        pass
-    try:
-        conn.execute("ALTER TABLE global_exemptions ADD COLUMN duration_days INTEGER DEFAULT 0")
-    except Exception:
-        pass
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS key_value (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS audit_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            entity_type TEXT NOT NULL,
-            entity_id TEXT NOT NULL,
-            action TEXT NOT NULL,
-            details TEXT DEFAULT '',
-            created_at TEXT NOT NULL
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS comment_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            thread_id TEXT,
-            username TEXT,
-            post_code TEXT,
-            comment_text TEXT,
-            spam_score REAL,
-            is_format_valid INTEGER,
-            created_at TEXT NOT NULL,
-            UNIQUE(thread_id, username, post_code)
-        )
-        """
-    )
-
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS automations (
-            thread_id TEXT PRIMARY KEY,
-            is_active INTEGER DEFAULT 0,
-            group_name TEXT DEFAULT '',
-            notify_username TEXT DEFAULT '',
-            control_method TEXT DEFAULT 'all_members',
-            updated_at TEXT DEFAULT ''
-        )
-        """
-    )
-
-    # İndeksler (Sorgu performansı ve hız için)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_comment_history_thread_user ON comment_history(thread_id, username);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_comment_history_user_created ON comment_history(username, created_at);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_logs_action_created ON audit_logs(action, created_at);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_exemptions_username ON exemptions(username);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_tokens_active_deleted ON tokens(is_active, deleted_at);")
-
-    try:
-        conn.execute("ALTER TABLE tokens ADD COLUMN deleted_at TEXT DEFAULT ''")
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        conn.execute("ALTER TABLE tokens ADD COLUMN relogin_attempts INTEGER DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass
-
-    conn.commit()
 
 
 def _migrate_from_json(conn):
@@ -174,12 +54,16 @@ def _migrate_from_json(conn):
 
     exemptions_payload = _json_read(EXEMPTIONS_FILE, {})
     if isinstance(exemptions_payload, dict):
-        save_exemptions(exemptions_payload, conn=conn)
+        for link, usernames in exemptions_payload.items():
+            if isinstance(usernames, list):
+                for username in usernames:
+                    conn.execute("INSERT OR IGNORE INTO exemptions (post_link, username) VALUES (?, ?)",
+                                 (link, normalize_username(username)))
 
     token_payload = _json_read(TOKEN_FILE, {})
     if isinstance(token_payload, dict) and token_payload:
         conn.execute(
-            "INSERT OR REPLACE INTO key_value (key, value) VALUES ('legacy_token_data', ?)",
+            "INSERT OR IGNORE INTO key_value (key, value) VALUES ('legacy_token_data', ?)",
             (json.dumps(token_payload, ensure_ascii=False),),
         )
 
@@ -571,7 +455,7 @@ def save_token_data(data):
     conn = _connect()
     try:
         conn.execute(
-            "INSERT OR REPLACE INTO key_value (key, value) VALUES ('legacy_token_data', ?)",
+            "INSERT OR IGNORE INTO key_value (key, value) VALUES ('legacy_token_data', ?)",
             (json.dumps(data, ensure_ascii=False),),
         )
         conn.commit()

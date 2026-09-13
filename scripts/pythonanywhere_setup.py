@@ -83,6 +83,8 @@ def wsgi_environment(text):
 
 
 def select_database(project, explicit=None, previous=None):
+    candidates = sorted(path for path in project.glob('*')
+                        if path.is_file() and path.suffix.lower() in {'.db', '.db3', '.sqlite', '.sqlite3'})
     configured = explicit or (previous or {}).get('APP_DB_FILE')
     if not configured and (project / STATE_FILE).exists():
         try:
@@ -96,10 +98,9 @@ def select_database(project, explicit=None, previous=None):
         path = (project / path).resolve() if not path.is_absolute() else path.resolve()
         if not path.exists() and not explicit:
             raise SetupError(f'Kayıtlı veritabanı bulunamadı: {path}. Boş veritabanı oluşturulmadı.')
-        if not path.exists() and any((project / name).exists() for name in ('app.db','app-sqlite.db','app.db3')):
+        if not path.exists() and candidates:
             raise SetupError('Belirtilen veritabanı yok fakat mevcut veriler var. Dosya yolunu kontrol edin; boş veritabanına geçilmedi.')
         return path
-    candidates = [project / name for name in ('app-sqlite.db','app.db','app.db3') if (project / name).exists()]
     if len(candidates) > 1:
         raise SetupError('Birden çok veritabanı var. Aktif dosyayı --database /tam/yol ile belirtin; hiçbir dosya silinmedi.')
     return candidates[0] if candidates else project / 'app.db'
@@ -127,17 +128,78 @@ def command(args, **kwargs):
     subprocess.run([str(arg) for arg in args], check=True, **kwargs)
 
 
-def ensure_project(project):
-    if (project / 'flask_app.py').is_file() and (project / 'requirements.txt').is_file():
-        return
-    if project.exists() and any(project.iterdir()):
+def managed_code(name):
+    path = Path(name)
+    if path.is_absolute() or '..' in path.parts or not path.parts:
+        return False
+    if any(part.startswith('.') or part in ('uploads', 'data', 'backups', 'scratch', '__pycache__') for part in path.parts):
+        return False
+    return path.suffix.lower() in {'.py', '.html', '.css', '.js', '.mjs', '.cjs', '.sh', '.md', '.sql'} or name == 'requirements.txt'
+
+
+def restore_code(project, backup):
+    plan = json.loads((backup / 'code-plan.json').read_text(encoding='utf-8'))
+    for name in plan['changed']:
+        destination = project / name
+        saved = backup / 'code' / name
+        if saved.is_file():
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(saved, destination)
+        else:
+            destination.unlink(missing_ok=True)
+
+
+def ensure_project(project, backup=None):
+    existing = (project / 'flask_app.py').is_file() and (project / 'requirements.txt').is_file()
+    if project.exists() and any(project.iterdir()) and not existing:
         raise SetupError('Hedef klasör boş değil ve uygulama bulunamadı. Başka klasörü --path ile belirtin.')
+    if backup is None:
+        raise SetupError('Kod güncellemesi için doğrulanmış yedek klasörü gerekli.')
     project.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='kontrol-download-', dir=project.parent) as temporary:
         checkout = Path(temporary) / 'source'
         command(['git','clone','--depth','1','--branch','main',REPOSITORY,checkout])
+        tracked = subprocess.check_output(['git','-C',str(checkout),'ls-files','-z']).decode().split('\0')
+        incoming = {name for name in tracked if managed_code(name)}
+        if not {'flask_app.py','requirements.txt','app_core/sqlite_schema.py'} <= incoming:
+            raise SetupError('İndirilen sürüm eksik; mevcut kod değiştirilmedi.')
+        old = set()
+        state = project / STATE_FILE
+        if state.exists():
+            old.update(json.loads(state.read_text(encoding='utf-8')).get('managed_files', []))
+        if (project / '.git').exists():
+            old.update(subprocess.check_output(['git','-C',str(project),'ls-files','-z']).decode().split('\0'))
+        old = {name for name in old if managed_code(name)}
+        changed = sorted(incoming | old)
+        # Validate all paths before copying or removing anything. Never traverse symlinks.
+        for name in changed:
+            destination = project / name
+            if destination.resolve() != project.resolve() / name or destination.is_symlink():
+                raise SetupError('Kod yolunda sembolik bağlantı var; güncelleme durduruldu.')
+            if destination.exists() and not destination.is_file():
+                raise SetupError('Kod dosyası yerine klasör var; güncelleme durduruldu.')
+        for name in incoming:
+            if (checkout / name).is_symlink():
+                raise SetupError('İndirilen kodda sembolik bağlantı var.')
+        for name in changed:
+            source = project / name
+            if source.is_file():
+                target = backup / 'code' / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
+        atomic_text(backup / 'code-plan.json', json.dumps({'changed': changed}))
         project.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(checkout, project, dirs_exist_ok=True)
+        try:
+            for name in incoming:
+                destination = project / name
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(checkout / name, destination)
+            for name in old - incoming:
+                (project / name).unlink(missing_ok=True)
+        except BaseException:
+            restore_code(project, backup)
+            raise
+        return sorted(incoming)
 
 
 def make_wsgi(project, database, previous):
@@ -279,7 +341,6 @@ def main(argv=None):
             fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError:
             raise SetupError('Başka bir kurulum çalışıyor; tamamlanmasını bekleyin.') from None
-        ensure_project(project)
         backup = Path.home()/'.kontrol-backups'/(datetime.now().strftime('%Y%m%d-%H%M%S')+'-'+secrets.token_hex(3))
         backup.mkdir(parents=True,mode=0o700)
         backup.parent.chmod(0o700)
@@ -289,9 +350,19 @@ def main(argv=None):
                 shutil.copy2(project/name,backup/name)
                 (backup/name).chmod(0o600)
         print(f'Yedek hazır: {backup}',flush=True)
-        environment = prepare_runtime(project,executable,version,database,previous)
-        configure(api,project,domain,version,environment,wsgi_path,backup,existing,{**previous,'APP_DB_FILE':str(database)})
-        atomic_text(project/STATE_FILE,json.dumps({'domain':domain,'database':str(database),'backup':str(backup)},indent=2))
+        managed_files = ensure_project(project, backup)
+        try:
+            environment = prepare_runtime(project,executable,version,database,previous)
+            configure(api,project,domain,version,environment,wsgi_path,backup,existing,{**previous,'APP_DB_FILE':str(database)})
+        except BaseException:
+            restore_code(project, backup)
+            if existing:
+                try:
+                    api.call('POST', f'webapps/{domain}/reload/')
+                except Exception:
+                    pass
+            raise
+        atomic_text(project/STATE_FILE,json.dumps({'domain':domain,'database':str(database),'backup':str(backup),'managed_files':managed_files},indent=2))
         if not verify_site(domain):
             raise SetupError('Canlı sayfa doğrulanamadı. PythonAnywhere hata günlüğünü kontrol edin; kurulum başarılı olarak işaretlenmedi.')
         print(f'Kurulum tamamlandı: https://{domain}\nYönetici şifresi dosyası: {project/"admin_password.txt"} (var olan WSGI şifre ayarı korunur).\nVeritabanı korundu; worker veya zamanlanmış görev kurulmadı.')

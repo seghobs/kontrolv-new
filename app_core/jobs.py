@@ -6,22 +6,8 @@ from contextlib import contextmanager
 
 
 def init_schema(conn):
-    conn.executescript('''
-        CREATE TABLE IF NOT EXISTS jobs (
-            id TEXT PRIMARY KEY, kind TEXT NOT NULL, payload TEXT NOT NULL,
-            state TEXT NOT NULL DEFAULT 'queued', created REAL NOT NULL,
-            updated REAL NOT NULL, available REAL NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
-            owner TEXT, lease_until REAL, progress INTEGER NOT NULL DEFAULT 0,
-            message TEXT NOT NULL DEFAULT '', error TEXT, result TEXT,
-            dedupe_key TEXT UNIQUE, parent_id TEXT, effects_started INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE INDEX IF NOT EXISTS jobs_pending ON jobs(state, available);
-        CREATE INDEX IF NOT EXISTS jobs_created ON jobs(created);
-        CREATE TABLE IF NOT EXISTS login_attempts (
-            client TEXT PRIMARY KEY, failures INTEGER NOT NULL, expires REAL NOT NULL
-        );
-
-    ''')
+    from app_core.sqlite_schema import init_schema as upgrade
+    upgrade(conn)
 
 
 @contextmanager
