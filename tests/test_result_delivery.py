@@ -1,5 +1,7 @@
 import json
 import unittest
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
 from app_core import create_app
 
@@ -10,8 +12,6 @@ class ResultDeliveryTests(unittest.TestCase):
             self.app = create_app()
         self.app.config.update(TESTING=True, SESSION_COOKIE_SECURE=False)
         self.client = self.app.test_client()
-        with self.client.session_transaction() as session:
-            session["admin_logged_in"] = True
 
     def test_stable_versioned_assets_can_be_cached(self):
         with self.app.test_request_context():
@@ -26,16 +26,40 @@ class ResultDeliveryTests(unittest.TestCase):
         self.assertNotIn("Set-Cookie", response.headers)
         response.close()
 
-    def test_loading_page_uses_only_lightweight_poller(self):
+    def test_asset_version_updates_without_restarting_app(self):
+        from flask import url_for
+        with tempfile.NamedTemporaryFile(dir=self.app.static_folder, suffix='.css', delete=False) as asset:
+            path = Path(asset.name)
+            asset.write(b'body { color: red; }')
+        try:
+            with self.app.test_request_context():
+                original = url_for('static', filename=path.name)
+                self.assertEqual(original, url_for('static', filename=path.name))
+                path.write_text('body { color: blue; }', encoding='utf-8')
+                updated = url_for('static', filename=path.name)
+                self.assertNotEqual(original, updated)
+                self.assertEqual(updated, url_for('static', filename=path.name))
+        finally:
+            path.unlink()
+
+    def test_running_job_returns_to_form(self):
         with patch("app_core.routes.main.get_db_value", return_value=json.dumps({"status":"running", "progress":20})):
             response = self.client.get("/result/test")
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, '/?task=test')
+        response = self.client.get(response.location)
         text = response.get_data(as_text=True)
-        self.assertIn("js/result_polling.js?v=", text)
-        self.assertNotIn("js/result.js?v=", text)
-        self.assertNotIn("setInterval", text)
-        self.assertIn("no-store", response.headers["Cache-Control"])
-        self.assertIn("app;dur=", response.headers["Server-Timing"])
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('id="checkForm"', text)
+        self.assertIn('js/control_submit.js', text)
+        self.assertNotIn('loading-screen-card', text)
+        self.assertNotIn('waiting.css', text)
+
+    def test_inline_submission_returns_job_identifier(self):
+        with patch('app_core.jobs.enqueue', return_value='inline-job'):
+            response = self.client.post('/', data={'post_link':'https://www.instagram.com/p/ABC/'}, headers={'Accept':'application/json'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json, {'success':True, 'job_id':'inline-job'})
 
     def test_completed_page_renders_without_network_requests(self):
         result = {"links":[], "all_commented":[], "group":[], "user_missing_posts":{}, "user_comments":{}}
@@ -44,5 +68,5 @@ class ResultDeliveryTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         text = response.get_data(as_text=True)
         self.assertIn("js/result.js?v=", text)
-        self.assertNotIn("js/result_polling.js?v=", text)
+        self.assertIn("js/result_recheck.js", text)
         self.assertIn("no-store", response.headers["Cache-Control"])

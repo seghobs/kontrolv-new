@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/result.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-nav.css') }}">
 
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/result_report.css') }}">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
         const originalFetch = window.fetch;
@@ -44,7 +45,7 @@
         };
     </script>
     </head>
-<body {% if rate_limited %}data-rate-limited="true"{% endif %}>
+<body class="report-page" {% if rate_limited %}data-rate-limited="true"{% endif %}>
 
 
     {% if rate_limited %}
@@ -62,47 +63,9 @@
         <div class="row justify-content-center">
             <div class="col-12 col-md-10 col-lg-8 col-xl-7">
                 <div class="result-card">
-                    {% include '_worker_status.html' %}
-                    {% if is_loading %}
-                    <div class="loading-screen-container">
-                        <div class="loading-screen-card">
-                            <div class="loading-coffee-badge">
-                                <i class="fas fa-mug-hot"></i>
-                            </div>
-                            
-                            <h2 class="loading-title">Denetim Sürüyor...</h2>
-                            
-                            <div class="loading-status-pill">
-                                <span class="loading-status-dot"></span>
-                                <span id="loading-message">{{ message }}</span>
-                            </div>
-                            
-                            <!-- High Tech Progress Bar -->
-                            <div class="luxury-progress-wrap">
-                                <div class="luxury-progress-track">
-                                    <div class="luxury-progress-fill" 
-                                         id="loading-progress-bar"
-                                         style="width: {{ progress }}%;" 
-                                         aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100">
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="loading-percent-badge">
-                                <i class="fas fa-hourglass-half"></i>
-                                <span id="loading-percent">%{{ progress }} Tamamlandı</span>
-                            </div>
-                            {% if can_cancel %}
-                            <form class="cancel-job-form" method="post" action="{{ url_for('history.cancel', job_id=post_code) }}">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button class="result-action-btn primary" type="submit">Denetimi İptal Et</button>
-                                <small>Gönderilmiş mesajlar geri alınmaz.</small>
-                            </form>
-                            {% endif %}
 
-                        </div>
-                    {% else %}
                     <div class="result-header-wrap text-center mb-4">
+                        <div class="report-heading">
                         <div class="result-header-badge">
                             <i class="fas fa-chart-pie"></i>
                             <span>{% if check_likes %}Beğeni Denetim Raporu{% else %}Yorum Denetim Raporu{% endif %}</span>
@@ -110,9 +73,16 @@
                         <h1 class="result-header-title">
                             {% if check_likes %}Beğeni Durumu Özeti{% else %}Yorum Durumu Özeti{% endif %}
                         </h1>
+                        <p class="report-description">Katılımı inceleyin, eksikleri görün ve denetiminizi güncel tutun.</p>
+                        </div>
+                        <div class="report-summary" aria-label="Denetim özeti">
+                            <div><span>GÖNDERİ</span><strong>{{ (links or [])|length }}</strong><small>Kontrol edilen</small></div>
+                            <div><span>GRUP ÜYESİ</span><strong>{{ (group or [])|length }}</strong><small>Denetim kapsamı</small></div>
+                            <div><span>{% if check_likes %}BEĞENEN{% else %}YORUM YAZAN{% endif %}</span><strong>{{ (all_commented or [])|length }}</strong><small>Listelenen kişi</small></div>
+                        </div>
                         <!-- Hızlı Güncelle / Yeniden Tarama Butonları -->
                         <div class="result-top-actions">
-                            <a href="{{ url_for('history.index') }}" class="result-action-btn primary">Denetim Geçmişi</a>
+                            <a href="{{ url_for('history.index') }}" class="result-action-btn primary"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i>Denetim Geçmişi</a>
                             <button type="button" class="result-action-btn primary" onclick="triggerRecheck(true)">
                                 <i class="fas fa-bolt"></i>
                                 <span>Hızlı Güncelle (Eksikler)</span>
@@ -153,7 +123,7 @@
                                     </div>
                                 </div>
                             </div>
-                            
+        
                             <div id="resultPostSelectorBody" class="result-section-content collapsed">
                                 <div class="custom-dropdown" id="resultPostDropdown">
                                     <button type="button" class="dropdown-trigger" onclick="toggleResultDropdown('resultPostDropdown')">
@@ -161,7 +131,7 @@
                                         <i class="fas fa-chevron-down dropdown-arrow"></i>
                                     </button>
                                     <div class="dropdown-menu">
-                                        <input type="text" class="dropdown-search" placeholder="Paylaşım ara..." onkeyup="filterResultDropdown('resultPostDropdown', this.value)">
+                                        <input type="text" class="dropdown-search" placeholder="Paylaşım ara..." oninput="filterResultDropdown('resultPostDropdown', this.value)">
                                         <div class="dropdown-options" id="resultPostDropdownOptions"></div>
                                     </div>
                                 </div>
@@ -169,6 +139,7 @@
                         </div>
                     </div>
 
+                    <p id="loading-message" class="text-center small" role="status" aria-live="polite"></p>
                     <div id="sortable-cards-container">
                     {% for item in links %}
                     <div class="mb-4 sortable-main-card">
@@ -192,22 +163,22 @@
                                     <i id="eksiklerIcon-{{ loop.index }}" class="fas fa-chevron-down chevron-icon"></i>
                                 </div>
                             </div>
-                            
+        
                             <div class="eksikler-meta-strip mt-3" onclick="event.stopPropagation()">
                                 {% if item.sender %}
                                 <span class="badge badge-indigo-outline">
                                     <i class="fas fa-user-circle me-1"></i><span class="meta-label">Gönderi Sahibi:</span>@{{ item.sender }}
                                 </span>
                                 {% endif %}
-                                
+            
                                 <a href="{{ item.post_link }}" target="_blank" class="btn btn-sm btn-link-action" title="Linke Git">
                                     <i class="fas fa-external-link-alt"></i><span>Link</span>
                                 </a>
-                                
+            
                                 <button type="button" class="btn btn-sm btn-copy-action" data-link="{{ item.post_link }}" onclick="window.copyLink(this.dataset.link)" title="Linki kopyala">
                                     <i class="fas fa-copy"></i>
                                 </button>
-                                
+            
                                 <button type="button" class="btn btn-sm btn-info-action" onclick="window.showPostDetailsModal('{{ loop.index }}')" title="Gönderi Detayları">
                                     <i class="fas fa-info-circle"></i><span>Detaylar</span>
                                 </button>
@@ -223,7 +194,7 @@
                             <div class="search-container mb-3">
                                 <i class="fas fa-search search-icon"></i>
                                 <input type="text" placeholder="Bu link için kullanıcı ara..." 
-                                       class="search-input" data-index="{{ loop.index }}" onkeyup="filterEksiklerList(this.dataset.index)">
+                                       class="search-input" data-index="{{ loop.index }}" oninput="filterEksiklerList(this.dataset.index)">
                             </div>
 
                             <button type="button" class="btn btn-copy-eksikler mb-3" data-index="{{ loop.index }}" onclick="window.copyEksiklerList(this.dataset.index)">
@@ -279,7 +250,7 @@
                             <div class="search-container mb-3">
                                 <i class="fas fa-search search-icon"></i>
                                 <input type="text" id="completedSearchInput" placeholder="Kullanıcı adı ara..." 
-                                       class="search-input" onkeyup="filterCompletedList()">
+                                       class="search-input" oninput="filterCompletedList()">
                             </div>
                             <button type="button" class="btn btn-copy-eksikler mb-3" onclick="window.copyCompletedList()">
                                 <i class="fas fa-copy me-2"></i>Tamamlamış Listeyi Kopyala
@@ -291,10 +262,8 @@
                                         <span class="username-text">
                                             <i class="fas fa-grip-vertical drag-handle-inner me-2" style="color: var(--muted-foreground); cursor: grab;"></i>
                                             <i class="fas fa-user-check me-2" style="color: var(--accent-caramel);"></i><strong>{{ user }}</strong>
-                                            {% if user_comments and user_comments.get(user) and not check_likes %}
-                                             <span class="comment-preview-inline" style="color: var(--muted-foreground); font-size: 13px; font-style: italic; margin-left: 8px; opacity: 0.85;" title="Kullanıcının yazdığı yorum">
-                                                - "{{ user_comments.get(user)[0] }}"
-                                            </span>
+                                            {% if not check_likes %}
+                                            <span class="comment-preview-inline" data-comment-preview>{% if user_comments and user_comments.get(user) %}{{ user_comments.get(user)|join(' • ') }}{% else %}Yorum yükleniyor…{% endif %}</span>
                                             {% endif %}
                                         </span>
                                         {% if duplicate_comment_users and user in duplicate_comment_users %}
@@ -314,7 +283,7 @@
                         </div>
                     </div>
                     {% endif %}
-                    
+
                     {% if user_missing_posts and links|length > 1 %}
                     <div class="mb-4 sortable-main-card">
                         <div class="detayli-rapor-header" onclick="window.toggleDetayliRapor()">
@@ -357,19 +326,19 @@
                                                 <i class="fas fa-exclamation-circle me-1"></i>{{ posts|length }} eksik işlem
                                             </span>
                                         </div>
-                                        
+                    
                                         <div class="d-flex align-items-center flex-wrap gap-2 mt-2">
                                             <button type="button" class="btn btn-sm btn-copy-action" data-user="{{ username }}" onclick="event.stopPropagation(); window.copyUserMissingPosts(this.dataset.user)" title="Tüm Linkleri Kopyala">
                                                 <i class="fas fa-copy"></i><span class="d-none d-sm-inline ms-1" style="padding-left: 2px;">Tüm Linkleri Kopyala</span>
                                             </button>
                                         </div>
                                     </div>
-                                    
+                
                                     <div class="d-flex justify-content-end align-items-center flex-shrink-0 ps-1">
                                         <i id="user-icon-{{ loop.index }}" class="fas fa-chevron-down chevron-icon"></i>
                                     </div>
                                 </div>
-                                
+            
                                 <div id="missing-posts-{{ username }}" class="row g-2 mt-3 collapsed">
                                     {% for post in posts %}
                                     <div class="col-12">
@@ -396,7 +365,7 @@
                     </div>
                     {% endif %}
                     </div>
-                    {% endif %}
+
                 </div>
             </div>
         </div>
@@ -426,10 +395,10 @@
                 <div id="modalPostMediaWrap" class="mb-3" style="display: none; position: relative; border-radius: 16px; overflow: hidden; background: #000; border: 1px solid rgba(196, 149, 106, 0.35); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); text-align: center; max-height: 420px;">
                     <!-- Fotoğraf Görseli (Aspect ratio korunur, bozulmaz) -->
                     <img id="modalPostThumbnailImg" src="" style="width: 100%; max-height: 400px; object-fit: contain; display: block; margin: 0 auto; background: #000;" referrerpolicy="no-referrer">
-                    
+
                     <!-- Reels / Video Oynatıcı -->
                     <video id="modalPostVideoPlayer" playsinline controls style="width: 100%; max-height: 420px; display: none; object-fit: contain; background: #000; outline: none;"></video>
-                    
+
                     <!-- Medya Rozeti (Reels / Fotoğraf) -->
                     <div id="modalPostMediaBadge" style="position: absolute; top: 10px; right: 12px; background: rgba(10, 8, 6, 0.85); backdrop-filter: blur(8px); padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; color: #f5ede4; border: 1px solid rgba(196, 149, 106, 0.35); display: flex; align-items: center; gap: 5px; z-index: 5; pointer-events: none;">
                         <i id="modalPostMediaBadgeIcon" class="fas fa-camera" style="color: var(--accent-caramel);"></i> 
@@ -493,7 +462,7 @@
             <div class="search-container mb-3" style="position: relative;">
                 <i class="fas fa-search search-icon" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--accent-caramel); font-size: 13px;"></i>
                 <input type="text" id="interactionsSearchInput" placeholder="Kullanıcı veya içerik ara..." 
-                       class="search-input" style="width: 100%; padding: 9px 14px 9px 38px; border-radius: 10px; background: rgba(0,0,0,0.35); border: 1px solid var(--border); color: #fff; font-size: 13px;" onkeyup="filterInteractionsList()">
+                       class="search-input" style="width: 100%; padding: 9px 14px 9px 38px; border-radius: 10px; background: rgba(0,0,0,0.35); border: 1px solid var(--border); color: #fff; font-size: 13px;" oninput="filterInteractionsList()">
             </div>
 
             <div class="d-flex justify-content-between align-items-center mb-2 px-1">
@@ -735,47 +704,6 @@
     <script>
         window.postCode = "{{ post_code if post_code else '' }}";
         
-        function triggerRecheck(onlyMissing) {
-            if (!window.postCode) return;
-            
-            const btnBolt = document.querySelector('button[onclick="triggerRecheck(true)"]');
-            const btnSync = document.querySelector('button[onclick="triggerRecheck(false)"]');
-            
-            if (btnBolt) btnBolt.disabled = true;
-            if (btnSync) btnSync.disabled = true;
-            
-            fetch(`/api/recheck/${window.postCode}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                },
-                body: JSON.stringify({ only_missing: onlyMissing })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    window.location.assign(data.result_url);
-                } else {
-                    alert(data.message || "Güncelleme başlatılamadı.");
-                    if (btnBolt) btnBolt.disabled = false;
-                    if (btnSync) btnSync.disabled = false;
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                alert("İletişim hatası oluştu.");
-                if (btnBolt) btnBolt.disabled = false;
-                if (btnSync) btnSync.disabled = false;
-            });
-        }
-
-        {% if is_loading %}
-        document.addEventListener('DOMContentLoaded', () => {
-            startResultPolling(window.postCode);
-        });
-        {% endif %}
-
         window.resultThreadId = "{{ thread_id if thread_id else '' }}";
         window.checkedPostUrl = "{{ links[0].post_link if links and links|length > 0 else '' }}";
         window.userComments = {{ user_comments | tojson | safe if user_comments else '{}' }};
@@ -800,11 +728,12 @@
         {% endfor %}
     </script>
 
-    {% if is_loading %}
-    <script src="{{ url_for('static', filename='js/result_polling.js') }}"></script>
-    {% else %}
+    <script src="{{ url_for('static', filename='js/result_polling.js', v='web-execution-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/result_recheck.js') }}"></script>
     <script src="{{ url_for('static', filename='js/result.js') }}"></script>
-    {% endif %}
+    <script src="{{ url_for('static', filename='js/comment_previews.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/member_analysis.css') }}">
+    <script src="{{ url_for('static', filename='js/member_analysis.js') }}"></script>
     
     <!-- Page Transition Script -->
     <script>

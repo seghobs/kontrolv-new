@@ -46,7 +46,7 @@ def clean_text_words(text):
     cleaned_text = re.sub(r'[^\w\s]', ' ', cleaned_text)
     return [w for w in cleaned_text.split() if len(w) > 0]
 
-def calculate_comment_spam_score(username, comment_text):
+def calculate_comment_spam_score(username, comment_text, recent_comments=None):
     if not comment_text or not comment_text.strip():
         return 100.0  # Empty comment is full spam
         
@@ -91,7 +91,8 @@ def calculate_comment_spam_score(username, comment_text):
             score += 35
             
     # 5. Comment repetition/duplicates check (History-based)
-    recent_comments = get_user_recent_comments(username, limit=5)
+    if recent_comments is None:
+        recent_comments = get_user_recent_comments(username, limit=5)
     if recent_comments:
         clean_text = text.lower().strip()
         exact_matches = sum(1 for rc in recent_comments if rc.lower().strip() == clean_text)

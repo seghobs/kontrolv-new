@@ -66,7 +66,7 @@ def login():
             clear_attempts(key)
             session["admin_logged_in"] = True
             logger.info("Admin girisi basarili.")
-            return redirect(url_for("main.index"))
+            return redirect(url_for("admin.panel"))
         logger.warning("Hatali admin giris denemesi.")
         return render_template("admin_login.html", error=True)
     return render_template("admin_login.html", error=False)
@@ -831,10 +831,9 @@ def live_test_automation_route():
     if not active_threads:
         return api_response(False, "ERROR", "Sistemde aktif edilmiş hiçbir otomasyon grubu bulunamadı.")
         
-    for tid in active_threads:
-        enqueue('automation', {'thread_id': str(tid), 'test_mode': True})
+    job_ids = [enqueue('automation', {'thread_id': str(tid), 'test_mode': True}) for tid in active_threads]
         
-    return api_response(True, "OK", f"{len(active_threads)} aktif grup için CANLI TEST başlatıldı. Gruplara veya üyelere mesaj gitmeyecek, sadece admine eksik raporu iletilecek.")
+    return api_response(True, "OK", f"{len(active_threads)} aktif grup için CANLI TEST başlatıldı. Gruplara veya üyelere mesaj gitmeyecek, sadece admine eksik raporu iletilecek.", extra={"job_ids": job_ids})
 @admin_bp.route("/unsend_messages", methods=["POST"])
 def unsend_messages_route():
     auth_error = _require_admin()
@@ -885,9 +884,7 @@ def get_global_automation_status_route():
     auth_error = _require_admin()
     if auth_error:
         return auth_error
-    from app_core.storage import get_global_automation_status
-    status = get_global_automation_status()
-    return api_response(True, "OK", "Basarili", extra={"is_active": status})
+    return api_response(True, "OK", "Zamanlı çalışma bu kurulumda kapalı.", extra={"is_active": False, "supported": False})
 
 
 @admin_bp.route("/toggle_global_automation", methods=["POST"])
@@ -895,13 +892,7 @@ def toggle_global_automation_route():
     auth_error = _require_admin()
     if auth_error:
         return auth_error
-    from app_core.storage import get_global_automation_status, set_global_automation_status
-    current = get_global_automation_status()
-    new_status = not current
-    set_global_automation_status(new_status)
-    
-    status_str = "aktif" if new_status else "pasif"
-    return api_response(True, "OK", f"Global otomasyon {status_str} yapildi.", extra={"is_active": new_status})
+    return api_response(False, "UNAVAILABLE", "Ücretsiz kurulumda kontrolleri Şimdi Çalıştır düğmesiyle başlatın.")
 
 
 @admin_bp.route("/get_global_automation_settings", methods=["GET"])

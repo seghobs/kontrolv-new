@@ -63,7 +63,7 @@ class FeatureTests(unittest.TestCase):
         self.assertEqual(client.get('/tools').status_code,200)
         with client.session_transaction() as s:s.clear()
         self.assertEqual(client.post('/tools/presets/'+preset['id']+'/start').status_code,302)
-        self.assertEqual(client.get('/api/management_overview').status_code,401)
+        self.assertEqual(client.get('/api/management_overview').status_code,200)
 
     def test_preset_uses_current_members_and_filters(self):
         payload=dict(thread_id='123',date='2026-09-09',check_likes=False,low_likes=True,only_sharers=True)
@@ -73,7 +73,7 @@ class FeatureTests(unittest.TestCase):
 
     def test_summary_excludes_failed_posts_and_separates_types(self):
         data=dict(thread_id='123',check_likes=False,links=[{'eksikler':['bob'],'commenters':['alice']},{'error':'API failed','eksikler':['a','b','c']}])
-        identifier=jobs.enqueue('manual',{});jobs.claim('owner');jobs.complete(identifier,'owner',data)
+        identifier=jobs.enqueue('manual',{});jobs.claim_request(identifier,'owner');jobs.complete(identifier,'owner',data)
         summary=features.group_summary()[0]
         self.assertEqual(summary['latest'],50)
         self.assertEqual(summary['frequent'],[('bob',1)])

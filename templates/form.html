@@ -59,7 +59,6 @@
                             <span class="form-header-sub">Instagram Gönderi & Yorum Denetim Sistemi</span>
                         </div>
                     </div>
-{% include '_worker_status.html' %}
                     <form id="checkForm" method="post" action="/">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="thread_id" id="thread_id_input">
@@ -142,7 +141,7 @@
                                         <i class="fas fa-chevron-down dropdown-arrow"></i>
                                     </button>
                                     <div class="dropdown-menu">
-                                        <input type="text" class="dropdown-search" placeholder="Grup ara..." onkeyup="filterDropdown('groupDropdown', this.value)">
+                                        <input type="text" class="dropdown-search" placeholder="Grup ara..." oninput="filterDropdown('groupDropdown', this.value)">
                                         <div class="dropdown-options"></div>
                                     </div>
                                 </div>
@@ -226,7 +225,7 @@
                                     </button>
                                     <div class="dropdown-menu">
                                         <div class="dropdown-search-wrapper">
-                                            <input type="text" class="dropdown-search" placeholder="Paylaşım ara..." onkeyup="filterDropdown('postDropdown', this.value)">
+                                            <input type="text" class="dropdown-search" placeholder="Paylaşım ara..." oninput="filterDropdown('postDropdown', this.value)">
                                             <button type="button" class="btn-dropdown-search-filter" id="postFilterBtn" onclick="openPostFilterModal(event)" title="Filtrele & Sırala">
                                                 <i class="fas fa-sliders-h"></i>
                                                 <span class="filter-active-dot" id="postFilterActiveDot" style="display: none;"></span>
@@ -244,7 +243,7 @@
 
                             <div class="tag-input-wrapper">
                                 <div id="tagSearchWrapper" style="display: none; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 10px;">
-                                    <input type="text" id="tagSearchInput" class="tag-search-input" placeholder="Listede ara..." onkeyup="filterUserTags(this.value)">
+                                    <input type="text" id="tagSearchInput" class="tag-search-input" placeholder="Listede ara..." oninput="filterUserTags(this.value)">
                                 </div>
                                 <div id="userTagContainer" class="tag-container">
                                     <!-- Tags will be rendered here -->
@@ -287,6 +286,7 @@
                         <button type="submit" id="submitCheckBtn" class="btn btn-primary w-100 mb-3 mt-4">
                             <i class="fas fa-search me-2"></i>Kontrol Et
                         </button>
+                    <p id="loading-message" role="status" aria-live="polite" class="text-center small"></p>
                     </form>
 
                     <div class="d-none d-lg-flex gap-2">
@@ -480,7 +480,9 @@
     <!-- Bootstrap JS -->
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/form.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/result_polling.js', v='web-execution-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/control_submit.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/form.js', v='inline-1') }}"></script>
 
     <!-- Page Transition Script -->
     <script>

@@ -27,16 +27,6 @@ logger = logging.getLogger(__name__)
 main_bp = Blueprint("main", __name__)
 
 
-@main_bp.before_request
-def require_authenticated_operator():
-    if session.get("admin_logged_in"):
-        return None
-    if request.path.startswith("/api/") or request.method != "GET":
-        return jsonify({"ok": False, "success": False,
-                        "error": "Yönetici girişi gerekli."}), 401
-    return redirect(url_for("admin.login"))
-
-
 class ControlUnavailable(ValueError):
     pass
 
@@ -44,6 +34,20 @@ class ControlUnavailable(ValueError):
 def require_complete_result(result):
     if isinstance(result, dict) and (not result.get("ok") or result.get("rate_limited")):
         raise ControlUnavailable("Kontrol edilemedi: Instagram verileri alınamadı. Lütfen tekrar deneyin.")
+
+
+def require_complete_likers(details, usernames, missing):
+    # Positive matches are conclusive; absence requires a complete liker list.
+    if missing and (not details.get('like_count_verified') or
+                    len(usernames) < details.get('like_count', 0)):
+        raise ControlUnavailable("Beğeni listesi eksik alındı; üyeler eksik olarak işaretlenmedi. Lütfen tekrar deneyin.")
+
+
+def incomplete_comment_post(link, details, sender, comments):
+    return dict(details, post_link=link, sender=sender, eksikler=[], commenters=[],
+                comments_list=comments,
+                commenters_normalized={normalize_username(u) for u, _ in comments},
+                error='Doğrulanamadı: Bazı yorumların kullanıcı bilgisi veya yorum listesi alınamadı. Bu paylaşım için kesin eksik listesi oluşturulmadı.')
 
 
 def get_db_value(key):
@@ -134,8 +138,9 @@ def get_group_posts(thread_id):
     return jsonify(result)
 
 
-def get_exempted_users(post_link):
-    exemptions = load_exemptions()
+def get_exempted_users(post_link, exemptions=None):
+    if exemptions is None:
+        exemptions = load_exemptions()
     post_link_decoded = html.unescape(post_link)
     raw_usernames = exemptions.get(post_link_decoded, [])
     return {normalize_username(u) for u in raw_usernames}
@@ -187,6 +192,8 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
 
     grup_uye_kullanicilar = {normalize_username(u) for u in grup_uye.split() if u.strip()}
     links_raw = [l.strip().rstrip('/') for l in link.split("\n") if l.strip()]
+    if not links_raw or any(donustur(url) is None for url in links_raw):
+        raise ControlUnavailable("Geçersiz paylaşım bağlantısı var. Bağlantıları kontrol edin.")
     
     if progress_callback:
         progress_callback(0, max(1, len(links_raw)), "Denetim motoru (aiohttp) başlatıldı, gönderiler sorgulanıyor...")
@@ -196,9 +203,10 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
     user_comments_map = {}  # {username: [comment_text1, comment_text2, ...]}
     link_results = []
     
-    working_token = get_working_active_token(skip_validation=True)
-    if not working_token:
-        raise ValueError("Aktif token bulunamadi veya tum tokenler expired. Lutfen admin panelden yeni token ekleyin.")
+    working_token = active_working_token
+    global_exempted = get_global_exempted_users()
+    exemptions = load_exemptions()
+    exemptions_by_link = {url: get_exempted_users(url, exemptions) for url in links_raw}
 
     post_senders = {}
     for ps in post_senders_raw:
@@ -217,11 +225,19 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
         async def _fetch_single(link_single):
             if only_missing and prev_result:
                 prev_link_res = next((lr for lr in prev_result.get("links", []) if lr.get("post_link", "").strip().rstrip('/') == link_single), None)
-                if prev_link_res and not prev_link_res.get("eksikler"):
+                if prev_link_res and not prev_link_res.get("error") and not prev_link_res.get("eksikler"):
                     tracker["done"] += 1
                     if progress_callback:
                         progress_callback(tracker["done"], tracker["total"], f"Gönderi {tracker['done']}/{tracker['total']} atlandı (Tamamlanmış)")
-                    return prev_link_res
+                    reused = dict(prev_link_res)
+                    reused['comments_list'] = [
+                        (comment['username'], comment['text']) if isinstance(comment, dict) else tuple(comment)
+                        for comment in prev_link_res.get('comments_list', [])
+                    ]
+                    reused['commenters_normalized'] = {
+                        normalize_username(username) for username, _ in reused['comments_list']
+                    } if not check_likes else set(prev_link_res.get('likers_list', []))
+                    return reused
 
             async with semaphore:
                 media_id = donustur(link_single)
@@ -242,8 +258,7 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
                 post_details = await get_post_details_async(media_id, working_token, session) or {}
                 post_sender = post_senders.get(link_single) or (normalize_username(post_details.get("sender")) if post_details.get("sender") else None)
                 
-                global_exempted = get_global_exempted_users()
-                izinli_uyeler = get_exempted_users(link_single)
+                izinli_uyeler = exemptions_by_link[link_single]
                 all_exempted_for_link = izinli_uyeler | global_exempted
                 if post_sender:
                     all_exempted_for_link.add(post_sender)
@@ -278,8 +293,15 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
                         norm_uname = normalize_username(uname)
                         commenters_normalized.add(norm_uname)
                 
+                if not check_likes and all_result.get('incomplete'):
+                    tracker['done'] += 1
+                    if progress_callback:
+                        progress_callback(tracker['done'], tracker['total'], 'Paylaşım doğrulanamadı; diğer kontroller sürüyor.')
+                    return incomplete_comment_post(link_single, post_details, post_sender, comments_list)
                 require_complete_result(all_result)
                 eksikler = grup_uye_kullanicilar - all_exempted_for_link - commenters_normalized
+                if check_likes:
+                    require_complete_likers(post_details, commenters_normalized, eksikler)
                 tamamlayanlar = grup_uye_kullanicilar - all_exempted_for_link - eksikler
                 
                 # Güvenli 0.5 - 1.0 saniye bekleme
@@ -330,14 +352,17 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
         for link_single in links_raw:
             media_id = donustur(link_single)
             if not media_id: continue
-            taken_at, sender = get_media_taken_at(media_id, working_token)
             post_details = get_post_details(media_id, working_token) or {}
             post_sender = post_senders.get(link_single) or (normalize_username(post_details.get("sender")) if post_details.get("sender") else None)
-            global_exempted = get_global_exempted_users()
-            izinli_uyeler = get_exempted_users(link_single)
+            izinli_uyeler = exemptions_by_link[link_single]
             all_exempted_for_link = izinli_uyeler | global_exempted
             if post_sender: all_exempted_for_link.add(post_sender)
             if check_likes:
+                if post_details.get('like_count', 0) > 90:
+                    fetched_results.append(dict(post_details, post_link=link_single, sender=post_sender,
+                        eksikler=[], commenters=[], comments_list=[],
+                        error="Bu gönderi 90'dan fazla beğeni aldığı için kontrol edilmedi."))
+                    continue
                 all_result = fetch_likers_with_failover(media_id, token_record=working_token)
                 commenters_normalized = {normalize_username(u) for u in (all_result if isinstance(all_result, set) else all_result.get("usernames", set()))}
                 comments_list = []
@@ -345,8 +370,13 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
                 all_result = fetch_comments_with_failover(media_id, token_record=working_token)
                 comments_list = all_result if isinstance(all_result, list) else all_result.get("comments", [])
                 commenters_normalized = {normalize_username(uname) for uname, _ in comments_list}
+            if not check_likes and isinstance(all_result, dict) and all_result.get('incomplete'):
+                fetched_results.append(incomplete_comment_post(link_single, post_details, post_sender, comments_list))
+                continue
             require_complete_result(all_result)
             eksikler = grup_uye_kullanicilar - all_exempted_for_link - commenters_normalized
+            if check_likes:
+                require_complete_likers(post_details, commenters_normalized, eksikler)
             tamamlayanlar = grup_uye_kullanicilar - all_exempted_for_link - eksikler
             fetched_results.append({
                 "post_link": link_single,
@@ -365,8 +395,8 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
                 "commenters_normalized": commenters_normalized
             })
 
-    from app_core.nlp_scorer import calculate_comment_spam_score
-    from app_core.storage import save_comment_log
+    from app_core.storage import score_and_save_comment_logs
+    comment_records = []
     import re
 
     for res in fetched_results:
@@ -403,14 +433,16 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
             
             if norm_uname in grup_uye_kullanicilar and thread_id:
                 is_valid = 1 if (has_emoji(text) and clean_word_count(text) >= 2) else 0
-                spam_score = calculate_comment_spam_score(norm_uname, text)
-                save_comment_log(thread_id, norm_uname, post_code, text, spam_score, is_valid)
+                comment_records.append((thread_id, norm_uname, post_code, text, is_valid))
 
         for eksik in res.get("eksikler", []):
             if eksik not in user_missing_posts:
                 user_missing_posts[eksik] = []
             user_missing_posts[eksik].append(link_single)
     
+    if comment_records:
+        score_and_save_comment_logs(comment_records)
+
     if not link_results:
         raise ValueError("Gecerli link bulunamadi.")
 
@@ -435,18 +467,20 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
             if has_emoji(comment) and clean_word_count(comment) >= 2:
                 has_any_valid = True
                 break
-        if not has_any_valid:
+        if not has_any_valid and all(comments):
             invalid_comment_users.add(user)
 
     # Collect all exempted users from all links + global exemptions
-    global_exempted = get_global_exempted_users()
     all_exempted = global_exempted.copy()
     eksikler_all = set()
     for lr in link_results:
-        all_exempted.update(get_exempted_users(lr["post_link"]))
+        all_exempted.update(exemptions_by_link[lr["post_link"]])
         eksikler_all.update(lr.get("eksikler", []))
     
     tamamlayanlar_genel = grup_uye_kullanicilar - all_exempted - eksikler_all
+    if any(lr.get('error') for lr in link_results):
+        # Skipped/unverified posts cannot establish completion of the whole run.
+        tamamlayanlar_genel = set()
     
     user_missing_formatted = {user: posts for user, posts in user_missing_posts.items()}
     
@@ -497,82 +531,12 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
     }
 
 
-def run_manual_control_async(post_code, only_missing=False):
-    import json
-    import traceback
-    
-    # 1. Girdileri veritabanından oku
-    inputs_json = get_db_value(f"manual_run_inputs_{post_code}")
-    if not inputs_json:
-        set_db_value(f"task_status_{post_code}", json.dumps({
-            "status": "failed",
-            "progress": 100,
-            "error": "Denetim girdileri veritabanında bulunamadı."
-        }))
-        return
-
-    try:
-        inputs = json.loads(inputs_json)
-        inputs = clean_data_recursive(inputs)
-        link = inputs.get("link")
-        grup_uye = inputs.get("grup_uye")
-        thread_id = inputs.get("thread_id")
-        post_senders_raw = inputs.get("post_senders_raw", [])
-        check_likes = inputs.get("check_likes", False)
-        
-        # Hızlı güncelleme için önceki sonuçları yükle
-        prev_result = None
-        if only_missing:
-            prev_result_json = get_db_value(f"manual_run_result_{post_code}")
-            if prev_result_json:
-                try:
-                    prev_result = json.loads(prev_result_json)
-                except Exception:
-                    pass
-
-        # İlerleme bildirim callback'i
-        def progress_cb(current, total, msg):
-            progress_percent = int((current / total) * 90) # Son %10'u tamamlama için ayır
-            set_db_value(f"task_status_{post_code}", json.dumps({
-                "status": "running",
-                "progress": max(5, progress_percent),
-                "message": msg,
-                "error": None
-            }))
-
-        # Kontrolü çalıştır
-        res_data = run_manual_control(
-            link=link,
-            grup_uye=grup_uye,
-            thread_id=thread_id,
-            post_senders_raw=post_senders_raw,
-            check_likes=check_likes,
-            only_missing=only_missing,
-            prev_result=prev_result,
-            progress_callback=progress_cb
-        )
-        
-        # Sonucu veritabanına kaydet
-        set_db_value(f"manual_run_result_{post_code}", json.dumps(res_data, ensure_ascii=False))
-        
-        # Görevi tamamlandı olarak işaretle
-        set_db_value(f"task_status_{post_code}", json.dumps({
-            "status": "completed",
-            "progress": 100,
-            "error": None
-        }))
-        
-    except Exception as e:
-        logger.exception("Arka planda manuel denetim hatası")
-        set_db_value(f"task_status_{post_code}", json.dumps({
-            "status": "failed",
-            "progress": 100,
-            "error": str(e)
-        }))
-
-
 @main_bp.route("/result/<post_code>", methods=["GET"])
 def result_page_new(post_code):
+    from app_core.jobs import get_job_state
+    state = get_job_state(post_code)
+    if state and state['kind'] == 'member':
+        return redirect('/member-analysis/' + post_code)
     task_status_json = get_db_value(f"task_status_{post_code}")
     if not task_status_json:
         return redirect("/")
@@ -610,16 +574,8 @@ def result_page_new(post_code):
         )
         
     elif status == "running":
-        return render_template(
-            "result.html",
-            is_loading=True,
-            can_cancel=task_status.get('queue_state') in ('queued', 'running'),
-            progress=task_status.get("progress", 0),
-            message=task_status.get("message", "İşlem başlatılıyor..."),
-            post_code=post_code,
-            links=[]
-        )
-        
+        return redirect(url_for('main.index', task=post_code))
+
     else: # failed
         return render_template(
             "result.html",
@@ -632,15 +588,27 @@ def result_page_new(post_code):
 
 @main_bp.route("/api/task_status/<post_code>", methods=["GET"])
 def task_status_route(post_code):
+    from app_core.jobs import get_job_state, public_status
+    job = get_job_state(post_code)
+    if job:
+        data = public_status(job)
+        data['execute_in_request'] = job['kind'] in ('manual','preset','member') or bool(job['kind'] == 'automation' and session.get('admin_logged_in'))
+        return jsonify(clean_data_recursive(data))
+    # Preserve links to historical records not yet imported.
     task_status_json = get_db_value(f"task_status_{post_code}")
     if not task_status_json:
         return jsonify({"status": "not_found", "progress": 0, "error": "Görev bulunamadı"})
     try:
-        data = json.loads(task_status_json)
-        data = clean_data_recursive(data)
-        return jsonify(data)
-    except Exception as e:
-        return jsonify({"status": "failed", "progress": 100, "error": str(e)})
+        return jsonify(clean_data_recursive(json.loads(task_status_json)))
+    except (TypeError, ValueError):
+        return jsonify({"status": "failed", "error": "Denetim durumu okunamadı."})
+
+
+@main_bp.route('/api/task_run/<post_code>', methods=['POST'])
+def task_run_route(post_code):
+    from app_core.web_jobs import execute_job
+    result, status = execute_job(post_code, allow_automation=bool(session.get('admin_logged_in')))
+    return jsonify(result), status
 
 
 @main_bp.route("/api/recheck/<post_code>", methods=["POST"])
@@ -665,8 +633,12 @@ def recheck_post(post_code):
 def index():
     if request.method == "POST":
         link = request.form.get("post_link", "").strip()
+        def invalid_input(message):
+            if request.accept_mimetypes.best == 'application/json':
+                return jsonify(success=False, message=message), 400
+            return render_template("form.html", token_error_message=message), 400
         if not link:
-            return render_template("form.html", token_error_message="Paylasim linki zorunludur.")
+            return invalid_input("Paylaşım linki zorunludur.")
 
         grup_uye = request.form.get("grup_uye", "")
         thread_id = request.form.get("thread_id", "").strip()
@@ -676,8 +648,8 @@ def index():
         # Post kodunu ayıkla
         import re
         match = re.search(r"instagram\.com/(?:share/)?(?:p|reels?|tv)/([a-zA-Z0-9\-_]+)", link)
-        if not match:
-            return render_template("form.html", token_error_message="Geçersiz Instagram linki formatı.")
+        if not match or any(donustur(item) is None for item in link.splitlines() if item.strip()):
+            return invalid_input("Geçersiz Instagram linki formatı. Tüm bağlantıları kontrol edin.")
         post_code = match.group(1)
 
         # Girdileri kaydet
@@ -690,6 +662,8 @@ def index():
         }
         from app_core.jobs import enqueue
         job_id = enqueue('manual', inputs)
+        if request.accept_mimetypes.best == 'application/json':
+            return jsonify(success=True, job_id=job_id)
         return redirect(url_for("main.result_page_new", post_code=job_id))
 
     refresh = request.args.get("refresh") == "1"

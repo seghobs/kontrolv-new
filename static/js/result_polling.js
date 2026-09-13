@@ -1,19 +1,8 @@
-// Navigate as soon as the server finishes; visual progress never delays results.
-function startResultPolling(postCode) {
-    const progressBar = document.getElementById('loading-progress-bar');
+// Keep the status message current and open results as soon as the server finishes.
+function startResultPolling(postCode, onMissing) {
     const loadingMsg = document.getElementById('loading-message');
-    const loadingPercent = document.getElementById('loading-percent');
     let finished = false;
     let retryDelay = 1000;
-
-    function showProgress(value) {
-        const progress = Math.max(0, Math.min(100, Number(value) || 0));
-        if (progressBar) {
-            progressBar.style.width = progress + '%';
-            progressBar.setAttribute('aria-valuenow', progress);
-        }
-        if (loadingPercent) loadingPercent.textContent = `%${progress} Tamamlandı`;
-    }
 
     async function pollStatus() {
         if (finished) return;
@@ -23,30 +12,42 @@ function startResultPolling(postCode) {
             const response = await fetch(`/api/task_status/${encodeURIComponent(postCode)}`, {
                 cache: 'no-store', signal: controller.signal,
             });
-            if (response.status === 401) {
-                finished = true;
-                window.location.assign('/admin/login');
-                return;
-            }
             if (!response.ok) throw new Error('Status request failed');
             const data = await response.json();
             retryDelay = 1000;
             if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
                 finished = true;
                 if (data.status === 'completed') {
-                    showProgress(100);
                     if (loadingMsg) loadingMsg.textContent = 'Denetim tamamlandı, sonuçlar açılıyor...';
                 }
-                window.location.reload();
+                window.location.assign('/result/' + encodeURIComponent(postCode));
                 return;
             }
             if (data.status === 'not_found') {
                 finished = true;
-                if (loadingMsg) loadingMsg.textContent = 'Denetim bulunamadı. Ana sayfadan yeniden başlatın.';
+                if (loadingMsg) loadingMsg.textContent = 'Denetim bulunamadı. Yeniden başlatabilirsiniz.';
+                if (onMissing) onMissing();
                 return;
             }
-            showProgress(data.progress);
             if (loadingMsg && data.message) loadingMsg.textContent = data.message;
+            if (data.execute_in_request && data.status === 'running') {
+                if (loadingMsg) loadingMsg.textContent = 'Denetim çalıştırılıyor…';
+                const runController = new AbortController();
+                const runTimeout = setTimeout(() => runController.abort(), 165000);
+                try {
+                    const run = await fetch(`/api/task_run/${encodeURIComponent(postCode)}`, {
+                        method: 'POST', signal: runController.signal,
+                        headers: {'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''},
+                    });
+                    if (!run.ok) throw new Error('Denetim başlatılamadı.');
+                    const outcome = await run.json();
+                    if (['completed', 'failed', 'cancelled'].includes(outcome.status)) {
+                        finished = true;
+                        window.location.assign('/result/' + encodeURIComponent(postCode));
+                        return;
+                    }
+                } finally { clearTimeout(runTimeout); }
+            }
         } catch (error) {
             retryDelay = Math.min(retryDelay * 2, 5000);
             if (loadingMsg) loadingMsg.textContent = 'Sunucu yanıtı bekleniyor, tekrar bağlanılıyor...';

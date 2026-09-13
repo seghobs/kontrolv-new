@@ -17,18 +17,17 @@
         <div class="header-titles"><h1>Denetim Geçmişi</h1><span class="header-subtitle">Kontrolleriniz, sonuçlarınız ve değişimler</span></div></div>
         <a class="logout-btn" href="{{ url_for('main.index') }}"><i class="fas fa-house" aria-hidden="true"></i> Ana Sayfa</a>
     </header>
-{% include '_worker_status.html' %}
 {% include '_management_card.html' %}
     <section class="history-panel">
     <div class="history-section-heading"><span class="history-section-icon"><i class="fas fa-code-compare" aria-hidden="true"></i></span><div><h2>Sonuçları Karşılaştır</h2><p>İki denetim seçerek eksik listesindeki değişimleri görün.</p></div></div>
     <form method="get" class="history-controls">
         <label><span>Önceki denetim</span><select name="before" required>
             <option value="">Denetim seçin</option>
-            {% for row in rows if row.state == 'completed' %}<option value="{{ row.id }}" {% if request.args.get('before') == row.id %}selected{% endif %}>{{ row.date }} · {{ row.group_name }} · {{ 'Beğeni' if row.check_likes else 'Yorum' }} · {{ row.id[:8] }}</option>{% endfor %}
+            {% for row in rows if row.state == 'completed' and row.kind != 'member' %}<option value="{{ row.id }}" {% if request.args.get('before') == row.id %}selected{% endif %}>{{ row.date }} · {{ row.group_name }} · {{ 'Beğeni' if row.check_likes else 'Yorum' }} · {{ row.id[:8] }}</option>{% endfor %}
         </select></label>
         <label><span>Sonraki denetim</span><select name="after" required>
             <option value="">Denetim seçin</option>
-            {% for row in rows if row.state == 'completed' %}<option value="{{ row.id }}" {% if request.args.get('after') == row.id %}selected{% endif %}>{{ row.date }} · {{ row.group_name }} · {{ 'Beğeni' if row.check_likes else 'Yorum' }} · {{ row.id[:8] }}</option>{% endfor %}
+            {% for row in rows if row.state == 'completed' and row.kind != 'member' %}<option value="{{ row.id }}" {% if request.args.get('after') == row.id %}selected{% endif %}>{{ row.date }} · {{ row.group_name }} · {{ 'Beğeni' if row.check_likes else 'Yorum' }} · {{ row.id[:8] }}</option>{% endfor %}
         </select></label>
         <input type="hidden" name="page" value="{{ page }}">
         <button class="logout-btn" type="submit">Karşılaştır</button>
@@ -45,9 +44,9 @@
     <div class="history-scroll"><table class="history-table"><thead><tr><th>Tarih / Kimlik</th><th>Grup / Tür</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>
     {% for row in rows %}<tr>
         <td>{{ row.date }}<small>{{ row.id[:8] }}</small>{% if row.parent_id %}<small>Önceki: {{ row.parent_id[:8] }}</small>{% endif %}</td>
-        <td><strong>{{ row.group_name }}</strong><small class="history-group-code" title="{{ row.thread_id or '' }}">{{ row.thread_id or '' }}</small><small>{{ 'Otomasyon' if row.kind == 'automation' else ('Şablon' if row.kind == 'preset' else 'Manuel') }} · {{ 'Beğeni' if row.check_likes else 'Yorum' }}</small></td>
+        <td><strong>{{ row.group_name }}</strong><small class="history-group-code" title="{{ row.thread_id or '' }}">{{ row.thread_id or '' }}</small><small>{{ 'Otomasyon' if row.kind == 'automation' else ('Şablon' if row.kind == 'preset' else ('Üye Analizi' if row.kind == 'member' else 'Manuel')) }} · {{ 'Beğeni' if row.check_likes else 'Yorum' }}</small></td>
         <td><span class="history-state" data-state="{{ row.state }}">{{ labels.get(row.state,row.state) }}</span>{% if row.attempts %}<small>{{ row.attempts }} / 3 deneme</small>{% endif %}{% if row.error %}<small class="history-message">{{ row.error }}</small>{% elif row.state in ('queued','running','cancelling') %}<small class="history-message">{{ row.message }}</small>{% endif %}</td>
-        <td class="history-actions"><a class="logout-btn" href="{{ url_for('main.result_page_new', post_code=row.id) }}">{{ 'Sonucu Gör' if row.state == 'completed' else 'Durumu Gör' }} <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+        <td class="history-actions"><a class="logout-btn" href="{{ url_for('main.result_page_new', post_code=row.id) }}">{{ 'Sonucu Gör' if row.state == 'completed' and row.kind != 'member' else 'Durumu Gör' }} <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
         {% if row.state in ('queued','running') %}
         <form class="cancel-job-form" method="post" action="{{ url_for('history.cancel',job_id=row.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

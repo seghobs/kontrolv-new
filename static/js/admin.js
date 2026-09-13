@@ -1585,57 +1585,19 @@ document.getElementById("addExemptionForm").addEventListener("submit", async (ev
 // AUTOMATION MANAGEMENT (BETA)
 // ============================================
 
-async function fetchGlobalAutomationStatus() {
-    const btn = document.getElementById("globalAutomationToggleBtn");
-    if (!btn) return;
-    try {
-        const res = await fetch("/admin/get_global_automation_status");
-        const data = await res.json();
-        if (data.success) {
-            updateGlobalAutomationBtn(data.is_active);
-        }
-    } catch (e) {
-        console.error("Global otomasyon durumu alinamadi", e);
-    }
+function fetchGlobalAutomationStatus() {
+    const btn = document.getElementById('globalAutomationToggleBtn');
+    if (btn) { btn.disabled = true; btn.querySelector('span').textContent = 'Zamanlı çalışma kapalı'; }
 }
 
-function updateGlobalAutomationBtn(isActive) {
-    const btn = document.getElementById("globalAutomationToggleBtn");
-    if (!btn) return;
-    const span = btn.querySelector("span");
-    const icon = btn.querySelector("i");
-    if (isActive) {
-        btn.className = "btn auto-btn-toggle-status is-active";
-        span.textContent = "Global Otomasyon: AKTİF";
-        icon.className = "fas fa-toggle-on";
-        icon.style.color = "var(--accent-caramel)";
-    } else {
-        btn.className = "btn auto-btn-toggle-status is-passive";
-        span.textContent = "Global Otomasyon: PASİF";
-        icon.className = "fas fa-toggle-off";
-        icon.style.color = "var(--muted-foreground)";
+async function executeAdminCheck(jobId) {
+    for (;;) {
+        const res = await postJson('/api/task_run/' + encodeURIComponent(jobId), {});
+        if (res.status === 'completed') return;
+        if (res.status !== 'running') throw new Error(res.error || res.message || 'Denetim tamamlanamadı.');
+        await new Promise(resolve => setTimeout(resolve, 3000));
     }
 }
-
-async function toggleGlobalAutomation() {
-    const btn = document.getElementById("globalAutomationToggleBtn");
-    if(!btn) return;
-    btn.disabled = true;
-    try {
-        const res = await postJson("/admin/toggle_global_automation", {});
-        if (res.success) {
-            updateGlobalAutomationBtn(res.is_active);
-            showAlert(res.message, "success");
-        } else {
-            showAlert(res.message, "error");
-        }
-    } catch (e) {
-        showAlert("Hata: " + e.message, "error");
-    } finally {
-        btn.disabled = false;
-    }
-}
-window.toggleGlobalAutomation = toggleGlobalAutomation;
 
 async function fetchGlobalAutomationSettings() {
     try {
@@ -1869,7 +1831,9 @@ async function liveTestAutomation() {
         });
         const data = await res.json();
         if (data.success) {
-            showAlert(data.message, 'success');
+            showAlert('Kontroller çalışıyor; bu sayfayı açık tutun.', 'info');
+            for (const id of data.job_ids) await executeAdminCheck(id);
+            showAlert('Canlı test tamamlandı.', 'success');
         } else {
             showAlert(data.message || 'Hata oluştu.', 'error');
         }
@@ -1891,7 +1855,9 @@ async function triggerAutomation(threadId, groupName) {
         });
         const data = await res.json();
         if (data.success) {
-            showAlert('✅ Otomasyon arka planda çalışıyor. Flask loglarını kontrol edin.', 'success');
+            showAlert('Denetim çalışıyor; bu sayfayı açık tutun.', 'info');
+            await executeAdminCheck(data.job_id);
+            showAlert('Denetim tamamlandı.', 'success');
         } else {
             showAlert(data.message || 'Tetiklenemedi.', 'error');
         }

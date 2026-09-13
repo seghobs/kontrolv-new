@@ -1269,21 +1269,8 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
 
-            // If valid, show loading state
-            const submitBtn = document.getElementById("submitCheckBtn");
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Kontrol Ediliyor...';
-                submitBtn.classList.add("btn-loading-border");
-            }
-            
-            // Kontrol işlemi boyunca ekranı bulanıklaştır (Sunucu yanıt verip sayfa yönlenene kadar kalır)
-            const containerElement = document.querySelector('.container');
-            if (containerElement) {
-                containerElement.style.transition = 'filter 1.5s ease, opacity 1.5s ease';
-                containerElement.style.filter = 'blur(15px)';
-                containerElement.style.opacity = '0.4';
-            }
+            e.preventDefault();
+            window.submitControl(checkForm);
         });
     }
 
@@ -1702,7 +1689,7 @@ function viewCachedResult() {
     closeAutoRunModal();
     const checkForm = document.getElementById("checkForm");
     if (checkForm) {
-        checkForm.submit();
+        checkForm.requestSubmit();
     }
 }
 

@@ -60,7 +60,6 @@
             </nav>
         </div>
 
-{% include '_worker_status.html' %}
         <div id="statsStrip" class="stats-strip">
             <div class="stat-pill-item" onclick="scrollToAndHighlightTokens('all')" title="Tüm tokenları göster">
                 <div class="stat-pill-icon"><i class="fas fa-database"></i></div>
@@ -282,7 +281,7 @@
             <div id="automationBody" class="section-body collapsed">
                 <div class="exemption-info-banner">
                     <i class="fas fa-robot"></i>
-                    <span>Bu özellik, grupları belirlediğiniz GMT+3 saatlerinde otomatik tarar, paylaşımların eksiklerini çıkarır ve otomatik olarak gruba / üyelere DM ile iletir.</span>
+                    <span>Kontrolleri Şimdi Çalıştır düğmesiyle başlatın ve tamamlanana kadar sayfayı açık tutun. Ücretsiz kurulumda zamanlı çalışma kapalıdır; kayıtlı ayarlarınız korunur.</span>
                 </div>
 
                 <div class="auto-panel-card">
@@ -295,7 +294,7 @@
                         <label class="auto-form-label"><i class="fas fa-clock"></i> Çalışma Saatleri (Örn: 10:00, 15:00, 23:59)</label>
                         <div class="auto-input-wrap" style="max-width: 420px;">
                             <span class="auto-input-prefix"><i class="fas fa-hourglass-half"></i></span>
-                            <input type="text" id="global_auto_times" class="auto-input" placeholder="10:00, 15:00, 20:00">
+                            <input type="text" id="global_auto_times" disabled class="auto-input" placeholder="10:00, 15:00, 20:00">
                         </div>
                     </div>
                     
@@ -368,8 +367,8 @@
                 </div>
 
                 <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center;">
-                    <button type="button" class="btn auto-btn-toggle-status is-passive" id="globalAutomationToggleBtn" onclick="toggleGlobalAutomation()">
-                        <i class="fas fa-power-off"></i> <span>Durumu Alınıyor...</span>
+                    <button type="button" class="btn auto-btn-toggle-status is-passive" id="globalAutomationToggleBtn" disabled>
+                        <i class="fas fa-power-off"></i> <span>Zamanlı çalışma kapalı</span>
                     </button>
                     <button type="button" class="btn auto-btn-list-groups" onclick="loadAutomationGroups()" id="loadAutomationBtn">
                         <i class="fas fa-sync-alt"></i> Grupları Listele
@@ -407,7 +406,7 @@
                             <i class="fas fa-chevron-down dropdown-arrow"></i>
                         </button>
                         <div class="dropdown-menu" id="spamReportDropdownMenu">
-                            <input type="text" class="dropdown-search" placeholder="Grup ara..." onkeyup="filterSpamDropdown(this.value)">
+                            <input type="text" class="dropdown-search" placeholder="Grup ara..." oninput="filterSpamDropdown(this.value)">
                             <div class="dropdown-options" id="spamReportGroupDropdownOptions">
                                 <!-- Gruplar dinamik yüklenecek -->
                             </div>
@@ -420,7 +419,7 @@
                 <!-- Member Search Input (Initially Hidden) -->
                 <div id="spamReportMemberSearchWrapper" style="display: none; margin-bottom: 20px; max-width: 400px;">
                     <label style="color:rgba(255,255,255,0.8); font-size:13px; display:block; margin-bottom:8px;"><i class="fas fa-search me-1"></i> Üye Ara (Kullanıcı Adı):</label>
-                    <input type="text" id="spamReportMemberSearch" placeholder="Kullanıcı adı yazın..." onkeyup="filterSpamReportTable(this.value)" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 10px 14px; border-radius: 12px; width: 100%; outline: none; box-sizing: border-box;">
+                    <input type="text" id="spamReportMemberSearch" placeholder="Kullanıcı adı yazın..." oninput="filterSpamReportTable(this.value)" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 10px 14px; border-radius: 12px; width: 100%; outline: none; box-sizing: border-box;">
                 </div>
 
                 <div class="loading" id="spamReportLoading" style="display: none;">

@@ -73,7 +73,7 @@ def group_summary():
     conn=storage._connect()
     try:
         # Latest 100 complete checks; errors and exempt/skipped posts excluded.
-        rows=conn.execute("SELECT created,result FROM jobs WHERE state='completed' AND result IS NOT NULL ORDER BY created DESC LIMIT 100").fetchall()
+        rows=conn.execute("SELECT created,result FROM jobs WHERE state='completed' AND kind!='member' AND result IS NOT NULL ORDER BY created DESC LIMIT 100").fetchall()
         groups={}
         for row in reversed(rows):
             data=json.loads(row['result']);tid=str(data.get('thread_id') or '')

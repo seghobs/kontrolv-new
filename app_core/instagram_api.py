@@ -11,6 +11,47 @@ logger = logging.getLogger(__name__)
 
 MAX_COMMENT_PAGES = 50
 
+
+def parse_comment_page(body):
+    """Keep attributable comments; never turn malformed/anonymous data into absence."""
+    records = set()
+    last = None
+    incomplete = False
+    saw_comments = False
+    for line in (body or '').splitlines():
+        if not line.strip():
+            continue
+        try:
+            data = json.loads(line)
+        except (ValueError, TypeError):
+            incomplete = True
+            continue
+        if not isinstance(data, dict):
+            incomplete = True
+            continue
+        last = data
+        if 'comments' not in data:
+            continue
+        saw_comments = True
+        comments = data['comments']
+        if not isinstance(comments, list):
+            incomplete = True
+            continue
+        for comment in comments:
+            user = comment.get('user') if isinstance(comment, dict) else None
+            name = user.get('username') if isinstance(user, dict) else None
+            if not isinstance(name, str) or not name.strip():
+                incomplete = True
+                continue
+            from app_core.validators import is_valid_username
+            if not is_valid_username(name):
+                incomplete = True
+                continue
+            text = comment.get('text')
+            # A known author establishes presence even when the text is unavailable.
+            records.add((name.strip(), text if isinstance(text, str) else ''))
+    return last, records, incomplete or not saw_comments
+
 _http_sessions = {}
 _session_lock = threading.Lock()
 
@@ -141,6 +182,7 @@ def get_post_details(media_id, token_record):
         "sender": None,
         "owner_fullname": None,
         "like_count": 0,
+        "like_count_verified": False,
         "comment_count": 0,
         "comments_disabled": False,
         "caption": "",
@@ -182,6 +224,7 @@ def get_post_details(media_id, token_record):
                 res["owner_fullname"] = user.get("full_name")
                 res["profile_pic_url"] = user.get("profile_pic_url", "")
                 res["like_count"] = item.get("like_count", 0)
+                res["like_count_verified"] = isinstance(item.get("like_count"), int)
                 res["comment_count"] = item.get("comment_count", 0)
                 res["comments_disabled"] = item.get("comments_disabled", False)
                 caption = item.get("caption") or {}
@@ -466,6 +509,7 @@ def fetch_comment_usernames(media_id, token_record, min_id=None, progress_callba
     }
 
     usernames = set()
+    incomplete = False
     page_count = 0
 
     while page_count < MAX_COMMENT_PAGES:
@@ -493,17 +537,9 @@ def fetch_comment_usernames(media_id, token_record, min_id=None, progress_callba
         if response.status_code != 200:
             return {"ok": False, "status": response.status_code, "invalid_session": response_has_invalid_session(response), "usernames": usernames}
 
-        json_data = None
-        for line in response.text.splitlines():
-            try:
-                json_data = json.loads(line)
-                for comment in json_data.get("comments", []):
-                    uname = comment.get("user", {}).get("username")
-                    text = comment.get("text", "")
-                    if uname:
-                        usernames.add((uname, text))
-            except json.JSONDecodeError:
-                continue
+        json_data, page_comments, page_incomplete = parse_comment_page(response.text)
+        usernames.update(page_comments)
+        incomplete = incomplete or page_incomplete
 
         if progress_callback:
             try:
@@ -524,7 +560,7 @@ def fetch_comment_usernames(media_id, token_record, min_id=None, progress_callba
 
     if page_count >= MAX_COMMENT_PAGES and json_data.get("next_min_id"):
         return {"ok": False, "status": 502, "comments": list(usernames)}
-    return {"ok": True, "status": 200, "comments": list(usernames)}
+    return {"ok": not incomplete, "status": 200, "incomplete": incomplete, "comments": list(usernames)}
 
 
 def fetch_liker_usernames(media_id, token_record, progress_callback=None):
@@ -725,7 +761,7 @@ def fetch_group_members(token_record, thread_id):
         return {"ok": False, "error": str(e)}
 
 
-def fetch_group_media(token_record, thread_id, target_date=None):
+def fetch_group_media(token_record, thread_id, target_date=None, complete=False):
     import datetime
     import pytz
     
@@ -813,6 +849,49 @@ def fetch_group_media(token_record, thread_id, target_date=None):
         data = response.json()
         items = data.get("items", [])
         
+        if complete:
+            if data.get('status') == 'fail' or not isinstance(data.get('items'), list):
+                raise ValueError('Paylaşım listesi doğrulanamadı.')
+            import time
+            pagination_started = time.monotonic()
+            # Continue through the selected day; never report a truncated day as complete.
+            for page in range(40):
+                if time.monotonic()-pagination_started > 110: raise ValueError('Günün tamamı istek süresi içinde alınamadı.')
+                stamps = [int(i.get('timestamp',0)) for i in data.get('items',[])]
+                if not stamps or min(stamps) <= min_ts or (len(stamps) < 50 and not data.get('has_more')):
+                    break
+                next_ts = min(stamps) - 1
+                response = _get_http_session(username).get(
+                    f"https://i.instagram.com/api/v1/direct_v2/threads/{thread_id}/media/",
+                    params={'max_timestamp':next_ts,'limit':'50','media_type':'media_shares'},headers=headers,timeout=15)
+                if response.status_code != 200: raise ValueError('Günün tüm paylaşımları alınamadı.')
+                data=response.json()
+                if data.get('status') == 'fail' or not isinstance(data.get('items'),list): raise ValueError('Paylaşım sayfası doğrulanamadı.')
+                newer=data.get('items',[])
+                if newer and min(int(i.get('timestamp',0)) for i in newer) >= next_ts+1:
+                    raise ValueError('Paylaşım sayfalaması ilerlemedi.')
+                items.extend(newer)
+            else: raise ValueError('Günlük paylaşım sınırına ulaşıldı; tam liste doğrulanamadı.')
+            if not t_data or not isinstance(t_data.get('thread'),dict): raise ValueError('Grup mesajları alınamadı.')
+            thread=t_data.get('thread',{})
+            all_messages=list(thread.get('items',[]))
+            seen_cursors=set()
+            for page in range(40):
+                if time.monotonic()-pagination_started > 110: raise ValueError('Günün tamamı istek süresi içinde alınamadı.')
+                stamps=[int(i.get('timestamp',0)) for i in thread.get('items',[])]
+                if (stamps and min(stamps)<=min_ts) or not thread.get('has_older'): break
+                cursor=thread.get('oldest_cursor')
+                if not cursor or cursor in seen_cursors: raise ValueError('Grup mesajlarının tamamı alınamadı.')
+                seen_cursors.add(cursor)
+                response=_get_http_session(username).get(f"https://i.instagram.com/api/v1/direct_v2/threads/{thread_id}/",
+                    params={'cursor':cursor,'direction':'older'},headers=headers,timeout=15)
+                if response.status_code!=200: raise ValueError('Grup mesaj sayfası alınamadı.')
+                thread=response.json().get('thread')
+                if not isinstance(thread,dict): raise ValueError('Mesaj sayfası doğrulanamadı.')
+                all_messages.extend(thread.get('items',[]))
+            else: raise ValueError('Mesaj sınırına ulaşıldı; tam liste doğrulanamadı.')
+            t_data['thread']['items']=all_messages
+
         posts = []
         for item in items:
             media = item.get("media") or {}
@@ -1129,6 +1208,7 @@ async def get_post_details_async(media_id, token_record, session: aiohttp.Client
         "sender": None,
         "owner_fullname": None,
         "like_count": 0,
+        "like_count_verified": False,
         "comment_count": 0,
         "caption": "",
         "taken_at": 0,
@@ -1176,6 +1256,7 @@ async def get_post_details_async(media_id, token_record, session: aiohttp.Client
                     res["owner_fullname"] = user.get("full_name")
                     res["profile_pic_url"] = user.get("profile_pic_url", "")
                     res["like_count"] = item.get("like_count", 0)
+                    res["like_count_verified"] = isinstance(item.get("like_count"), int)
                     res["comment_count"] = item.get("comment_count", 0)
                     res["taken_at"] = item.get("taken_at", 0)
                     caption = item.get("caption") or {}
@@ -1250,6 +1331,7 @@ async def fetch_comment_usernames_async(media_id, token_record, session: aiohttp
         params["min_id"] = str(min_id)
 
     usernames = set()
+    incomplete = False
     page_count = 0
     proxy_url = get_outbound_proxy()
 
@@ -1274,20 +1356,9 @@ async def fetch_comment_usernames_async(media_id, token_record, session: aiohttp
                     return {"ok": False, "status": response.status, "comments": list(usernames)}
 
                 text_body = await response.text()
-                json_data = None
-                for line in text_body.splitlines():
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        json_data = json.loads(line)
-                        for comment in json_data.get("comments", []):
-                            uname = comment.get("user", {}).get("username")
-                            text = comment.get("text", "")
-                            if uname:
-                                usernames.add((uname, text))
-                    except json.JSONDecodeError:
-                        continue
+                json_data, page_comments, page_incomplete = parse_comment_page(text_body)
+                usernames.update(page_comments)
+                incomplete = incomplete or page_incomplete
 
                 if not json_data or json_data.get("status") == "fail":
                     return {"ok": False, "status": 502, "comments": list(usernames)}
@@ -1311,7 +1382,7 @@ async def fetch_comment_usernames_async(media_id, token_record, session: aiohttp
 
     if page_count >= MAX_COMMENT_PAGES and json_data.get("next_min_id"):
         return {"ok": False, "status": 502, "comments": list(usernames)}
-    return {"ok": True, "status": 200, "comments": list(usernames)}
+    return {"ok": not incomplete, "status": 200, "incomplete": incomplete, "comments": list(usernames)}
 
 
 async def fetch_liker_usernames_async(media_id, token_record, session: aiohttp.ClientSession):

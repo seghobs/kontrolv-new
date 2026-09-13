@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 def _connect():
     conn = sqlite3.connect(DB_FILE, timeout=30.0)
     conn.row_factory = sqlite3.Row
-    # Web and worker may use different hosts on a shared filesystem.
+    # The database may reside on a shared filesystem.
     mode = os.getenv("SQLITE_JOURNAL_MODE", "DELETE").upper()
     if mode not in {"DELETE", "WAL"}:
         conn.close()
@@ -764,8 +764,10 @@ def set_cached_run_result(thread_id, date_str, result_data):
         conn.close()
 
 
-def save_comment_log(thread_id, username, post_code, comment_text, spam_score, is_format_valid):
-    conn = _connect()
+def save_comment_log(thread_id, username, post_code, comment_text, spam_score, is_format_valid, conn=None):
+    own_conn = conn is None
+    if own_conn:
+        conn = _connect()
     try:
         now_str = datetime.now(GMT3).strftime("%Y-%m-%d %H:%M:%S")
         conn.execute(
@@ -782,7 +784,8 @@ def save_comment_log(thread_id, username, post_code, comment_text, spam_score, i
         logger.error("save_comment_log hatasi: %s", error)
         return False
     finally:
-        conn.close()
+        if own_conn:
+            conn.close()
 
 
 def get_group_spam_report(thread_id):
@@ -830,8 +833,10 @@ def get_user_comment_details(thread_id, username):
         conn.close()
 
 
-def get_user_recent_comments(username, limit=5):
-    conn = _connect()
+def get_user_recent_comments(username, limit=5, conn=None):
+    own_conn = conn is None
+    if own_conn:
+        conn = _connect()
     try:
         cursor = conn.execute(
             """
@@ -848,7 +853,8 @@ def get_user_recent_comments(username, limit=5):
         logger.error("get_user_recent_comments hatasi: %s", error)
         return []
     finally:
-        conn.close()
+        if own_conn:
+            conn.close()
 
 
 def load_automations():
@@ -934,5 +940,19 @@ def load_group_names():
         for row in conn.execute("SELECT key,value FROM key_value WHERE key GLOB 'group_name_*'"):
             names[row['key'][len('group_name_'):]] = json.loads(row['value'])
         return names
+    finally:
+        conn.close()
+
+
+def score_and_save_comment_logs(records):
+    """Reuse one connection while preserving sequential history-based scores."""
+    from app_core.nlp_scorer import calculate_comment_spam_score
+    conn = _connect()
+    try:
+        for thread_id, username, post_code, text, is_valid in records:
+            recent = get_user_recent_comments(username, limit=5, conn=conn)
+            score = calculate_comment_spam_score(username, text, recent_comments=recent)
+            if not save_comment_log(thread_id, username, post_code, text, score, is_valid, conn=conn):
+                conn.rollback()
     finally:
         conn.close()

@@ -136,6 +136,9 @@ def fetch_comments_with_failover(media_id, progress_callback=None, token_record=
 
         comments_data = result.get("comments", [])
 
+        if result.get('incomplete'):
+            return result
+
         if result.get("ok"):
             logger.info("Basari! Toplam %d yorum bulundu.", len(comments_data))
             return comments_data
@@ -475,7 +478,7 @@ def fetch_group_members_with_failover(thread_id, token_record=None):
     return result
 
 
-def fetch_group_media_with_failover(thread_id, target_date, token_record=None):
+def fetch_group_media_with_failover(thread_id, target_date, token_record=None, complete=False):
     max_retries = 3
     retry_count = 0
     tried_usernames = set()
@@ -489,7 +492,7 @@ def fetch_group_media_with_failover(thread_id, target_date, token_record=None):
 
         current_username = token_record.get("username", "bilinmeyen")
         from app_core.instagram_api import fetch_group_media
-        result = fetch_group_media(token_record, thread_id, target_date)
+        result = fetch_group_media(token_record, thread_id, target_date, complete=True) if complete else fetch_group_media(token_record, thread_id, target_date)
 
         if result.get("ok"):
             return result

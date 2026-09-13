@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import random
-import threading
 import time
 import uuid
 
@@ -489,6 +488,3 @@ def run_automation_for_thread(thread_id, test_mode=False, target_date=None, befo
     return report
 
 
-
-def start_automation():
-    logger.info("Otomasyon ayrı worker.py süreci tarafından çalıştırılır.")

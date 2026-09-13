@@ -41,3 +41,9 @@ token.json
 tokens.json
 *.db-*
 *.sqlite-*
+
+.mysql.json
+
+.mysql-enabled
+
+.web-manual-execution

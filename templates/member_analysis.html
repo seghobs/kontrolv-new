@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>@{{ job.payload.username }} · Günlük Analiz</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/member_analysis.css') }}">
+</head>
+<body class="member-page"><main>
+    <nav class="member-nav"><a href="/result/{{ job.parent_id }}"><i class="fas fa-arrow-left" aria-hidden="true"></i> Önceki rapor</a><a href="/history"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> Denetim geçmişi</a></nav>
+    <header class="member-hero">
+        <div class="member-identity"><span class="member-avatar" aria-hidden="true"><i class="fas fa-user-check"></i></span><div><span class="member-eyebrow">ÜYEYE ÖZEL GÜNLÜK ANALİZ</span><h1>@{{ job.payload.username }}</h1><div class="member-meta"><span><i class="far fa-calendar" aria-hidden="true"></i> {{ job.payload.date[8:10] }}.{{ job.payload.date[5:7] }}.{{ job.payload.date[:4] }}</span><span><i class="{{ 'far fa-heart' if job.payload.check_likes else 'far fa-comment' }}" aria-hidden="true"></i> {{ 'Yorum + Beğeni kontrolü' if job.payload.dual_check else ('Beğeni kontrolü' if job.payload.check_likes else 'Yorum kontrolü') }}</span></div></div></div>
+        <p>Seçilen gün gruba gönderilen tüm paylaşımlar, tek bir üye için kontrol edilir.</p>
+    {% if job.payload.dual_check and status.status=='completed' %}<nav class="member-nav" style="margin:22px 0 0;justify-content:flex-start"><a href="#member-missing-comments">Yorum eksikleri ↓</a><a href="#member-missing-likes">Beğeni eksikleri ↓</a></nav>{% endif %}
+    </header>
+    {% macro post_row(row, number, likes) %}
+    <article class="member-row" data-state="{{ row.state }}">
+        <div class="member-post-heading"><span class="member-post-number">{{ '%02d'|format(number) }}</span><div><h3>{{ '@' + row.sender if row.sender else 'Paylaşım' }}</h3><span class="member-state">{{ ('Beğeni bulunamadı' if likes else 'Yorum bulunamadı') if row.state=='missing' else (('Beğenmiş' if likes else 'Yorum yapmış') if row.state=='present' else 'Doğrulanamadı') }}</span></div><a class="member-post-link" href="{{ row.url }}" target="_blank" rel="noopener noreferrer" aria-label="{{ number }} numaralı paylaşımı aç">Paylaşımı aç <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></div>
+        <a class="member-url" href="{{ row.url }}" target="_blank" rel="noopener noreferrer">{{ row.url }}</a>
+        {% for text in row.comments %}<blockquote>{{ text or 'Yorum mevcut; metni alınamadı.' }}</blockquote>{% endfor %}
+    </article>
+    {% endmacro %}
+    {% if status.status == 'completed' %}
+    {% if job.result and job.result.comment_report is defined and job.result.like_report is defined %}
+        {% set reports=[job.result.comment_report,job.result.like_report] %}
+    {% elif job.result and job.result.rows is defined %}
+        {% set reports=[job.result] %}
+    {% else %}
+        {% set reports=[] %}
+    {% endif %}
+    {% for report in reports %}
+    {% set suffix=('-likes' if report.check_likes else '-comments') if job.payload.dual_check else '' %}
+    <div class="member-mode-block" data-mode="{{ 'likes' if report.check_likes else 'comments' }}">
+    {% if job.payload.dual_check %}<h2 class="member-mode-heading"><i class="{{ 'far fa-heart' if report.check_likes else 'far fa-comment' }}" aria-hidden="true"></i> {{ 'Beğeni analizi' if report.check_likes else 'Yorum analizi' }}</h2>{% endif %}
+        <section class="member-summary" aria-label="Analiz özeti"><div><span>PAYLAŞIM</span><strong>{{ report.total }}</strong><small>Kontrol edilen</small></div><div class="member-stat-missing"><span>EKSİK</span><strong>{{ report.counts.missing }}</strong><small>{{ 'Beğeni bulunamadı' if report.check_likes else 'Yorum bulunamadı' }}</small></div><div><span>TAMAMLANAN</span><strong>{{ report.counts.present }}</strong><small>{{ 'Beğenmiş' if report.check_likes else 'Yorum yapmış' }}</small></div><div><span>BELİRSİZ</span><strong>{{ report.counts.unknown }}</strong><small>Doğrulanamadı</small></div></section>
+
+    <section class="member-section member-missing" id="member-missing{{ suffix }}" aria-labelledby="missing-title{{ suffix }}">
+        <div class="member-section-head"><span class="member-section-icon"><i class="fas fa-user-minus" aria-hidden="true"></i></span><div><h2 id="missing-title{{ suffix }}">{{ ('Beğeni eksikleri' if report.check_likes else 'Yorum eksikleri') if job.payload.dual_check else 'Eksik paylaşımlar' }} <span class="member-count">{{ report.counts.missing }}</span></h2><p>{{ 'Beğeni yapmadığı' if report.check_likes else 'Yorum yapmadığı' }} paylaşımların listesi</p></div><button type="button" id="copy-member-missing{{ suffix }}" data-member-copy="{{ suffix }}" {% if not report.counts.missing %}disabled{% endif %}><i class="far fa-copy" aria-hidden="true"></i> {{ ('Beğeni eksiklerini kopyala' if report.check_likes else 'Yorum eksiklerini kopyala') if job.payload.dual_check else 'Eksikleri kopyala' }}</button></div>
+        <div class="member-section-body">{% for row in report.rows if row.state=='missing' %}{{ post_row(row,loop.index,report.check_likes) }}{% else %}<div class="member-empty"><i class="far fa-circle-check" aria-hidden="true"></i><div><h3>{{ 'Paylaşım bulunamadı' if not report.total else 'Doğrulanan paylaşımlarda eksik yok' }}</h3><p>{{ 'Seçilen gün grupta paylaşım bulunamadı.' if not report.total else ('Belirsiz sonuçları aşağıdaki bölümden inceleyebilirsiniz.' if report.counts.unknown else 'Bu üye, kontrol edilen tüm paylaşımları tamamlamış.') }}</p></div></div>{% endfor %}</div>
+        <span class="member-copy-feedback" id="member-copy-feedback{{ suffix }}" role="status" aria-live="polite"></span>
+        <textarea class="member-missing-text" id="member-missing-text{{ suffix }}" hidden readonly>@{{ report.username }} · {{ report.date }} · {{ 'Beğeni' if report.check_likes else 'Yorum' }} eksikleri
+{% for row in report.rows if row.state=='missing' %}{{ row.url }}
+{% endfor %}</textarea>
+    </section>
+    {% if report.counts.unknown %}<section class="member-section" id="member-unknown{{ suffix }}"><div class="member-section-head"><span class="member-section-icon"><i class="fas fa-circle-question" aria-hidden="true"></i></span><div><h2>Doğrulanamayanlar <span class="member-count">{{ report.counts.unknown }}</span></h2><p>Instagram verileri tam alınamadı. Bu paylaşımlar eksik sayılmadı.</p></div></div><div class="member-section-body">{% for row in report.rows if row.state=='unknown' %}{{ post_row(row,loop.index,report.check_likes) }}{% endfor %}</div></section>{% endif %}
+    <section class="member-section" id="member-present{{ suffix }}"><div class="member-section-head"><span class="member-section-icon"><i class="fas fa-user-check" aria-hidden="true"></i></span><div><h2>{{ 'Beğeni yapılanlar' if report.check_likes else 'Yorum yapılanlar' }} <span class="member-count">{{ report.counts.present }}</span></h2><p>{{ 'Güncel beğeni kaydı bulunan paylaşımlar' if report.check_likes else 'Üyenin yorumları ve ilgili paylaşımlar' }}</p></div></div><div class="member-section-body">{% for row in report.rows if row.state=='present' %}{{ post_row(row,loop.index,report.check_likes) }}{% else %}<p class="member-no-rows">{{ 'Beğeni' if report.check_likes else 'Yorum' }} kaydı bulunan paylaşım yok.</p>{% endfor %}</div></section>
+    </div>
+    {% else %}
+    <section class="member-processing"><span class="member-section-icon"><i class="fas fa-circle-info" aria-hidden="true"></i></span><div><h2>Sonuç görüntülenemedi</h2><p role="alert">Analiz kaydı mevcut ancak sonuç içeriği okunamadı. Önceki rapora dönerek yeni bir günlük analiz başlatabilirsiniz.</p><a href="/result/{{ job.parent_id }}">Önceki rapora dön →</a></div></section>
+    {% endfor %}
+    <script src="{{ url_for('static',filename='js/member_report.js') }}"></script>
+    {% elif status.status=='running' %}
+    <section class="member-processing"><span class="member-section-icon"><i class="fas fa-magnifying-glass" aria-hidden="true"></i></span><div><span class="member-eyebrow">ANALİZ DEVAM EDİYOR</span><h2>{{ 'Yorumlar ve beğeniler' if job.payload.dual_check else ('Beğeniler' if job.payload.check_likes else 'Yorumlar') }} kontrol ediliyor</h2><p id="loading-message" role="status">{{ status.message }}</p><p class="member-processing-note">Sonuçlar hazır olduğunda eksik paylaşımlar burada listelenecek. Sayfayı açık tutun.</p></div></section>
+    <script src="{{ url_for('static',filename='js/result_polling.js') }}"></script><script>startResultPolling({{ job.id|tojson }});</script>
+    {% else %}<section class="member-processing"><span class="member-section-icon"><i class="fas fa-circle-info" aria-hidden="true"></i></span><div><h2>Analiz tamamlanamadı</h2><p role="alert">{{ status.error or status.message }}</p></div></section>{% endif %}
+    <footer class="member-footnote"><i class="fas fa-circle-info" aria-hidden="true"></i><p>Tarih, paylaşımın gruba gönderildiği gündür. Güncel yorum ve beğeniler gösterilir; kişisel analizde muafiyet uygulanmaz.</p></footer>
+</main></body></html>

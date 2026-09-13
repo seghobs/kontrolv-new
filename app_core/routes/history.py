@@ -9,14 +9,6 @@ LABELS = {'queued':'Sırada', 'running':'Çalışıyor', 'completed':'Tamamland�
           'failed':'Başarısız', 'needs_attention':'Gönderim kontrolü gerekli'}
 
 
-@history_bp.before_request
-def require_login():
-    if not session.get('admin_logged_in'):
-        if request.path.startswith('/api/'):
-            return jsonify({'error': 'Yönetici girişi gerekli.'}), 401
-        return redirect(url_for('admin.login'))
-
-
 def compare_results(before, after):
     if (str(before.get('thread_id','')) != str(after.get('thread_id','')) or
             bool(before.get('check_likes')) != bool(after.get('check_likes'))):
@@ -48,7 +40,7 @@ def index():
     comparisons, error, members_changed = None, None, False
     if before_id and after_id:
         before, after = jobs.get_job(before_id), jobs.get_job(after_id)
-        if not before or not after or before['state'] != 'completed' or after['state'] != 'completed':
+        if not before or not after or before['state'] != 'completed' or after['state'] != 'completed' or before['kind']=='member' or after['kind']=='member':
             error = 'Karşılaştırma için tamamlanmış iki denetim seçin.'
         else:
             try:
@@ -83,11 +75,6 @@ def cancel(job_id):
     from app_core.storage import add_audit_log
     add_audit_log('denetim', job_id, 'Denetim iptali istendi', 'Yönetici oturumu')
     return redirect(url_for('main.result_page_new', post_code=job_id))
-
-
-@history_bp.route('/api/worker_status')
-def worker_status():
-    return jsonify(jobs.worker_status())
 
 
 @history_bp.route('/tools')

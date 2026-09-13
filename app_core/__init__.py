@@ -21,21 +21,33 @@ def create_app():
     # Content versions keep edited assets fresh without downloading unchanged files.
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 3600
     static_root = Path(app.static_folder)
-    asset_versions = {
-        path.relative_to(static_root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()[:16]
-        for path in static_root.rglob("*") if path.is_file()
-    }
+    asset_versions = {}
 
     @app.url_defaults
     def version_static_assets(endpoint, values):
         if endpoint == "static" and "v" not in values:
-            version = asset_versions.get(values.get("filename"))
-            if version:
-                values["v"] = version
+            filename = values.get("filename")
+            if not filename:
+                return
+            path = (static_root / filename).resolve()
+            if not path.is_relative_to(static_root.resolve()):
+                return
+            try:
+                stat = path.stat()
+                signature = (stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size)
+                cached = asset_versions.get(filename)
+                if cached is None or cached[0] != signature:
+                    cached = (signature, hashlib.sha256(path.read_bytes()).hexdigest()[:16])
+                    asset_versions[filename] = cached
+                values["v"] = cached[1]
+            except OSError:
+                return
 
     init_storage()
 
     app.register_blueprint(main_bp)
+    from app_core.member_analysis import member_bp
+    app.register_blueprint(member_bp)
     app.register_blueprint(admin_bp)
     from app_core.routes.history import history_bp
     app.register_blueprint(history_bp)

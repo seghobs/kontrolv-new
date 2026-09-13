@@ -13,7 +13,7 @@ from app_core import jobs, create_app
 import app_core.storage as storage
 from app_core.login_limits import reserve_attempt, clear_attempts
 from app_core.routes.history import compare_results
-import worker
+from app_core.web_jobs import execute_claimed
 
 
 class JobTests(unittest.TestCase):
@@ -28,6 +28,18 @@ class JobTests(unittest.TestCase):
         storage._init_db(conn)
         conn.close()
 
+    def claim(self, owner):
+        rows = jobs.history(page_size=100)
+        pending = [row for row in rows if row['state'] == 'queued']
+        if not pending: return None
+        return jobs.claim_request(pending[-1]['id'], owner)
+
+    def expire(self, job_id):
+        with jobs.transaction() as conn:
+            conn.execute('UPDATE jobs SET lease_until=0 WHERE id=?', (job_id,))
+        jobs.claim_request(job_id, 'recovery')
+        return 1
+
     def due(self, job_id):
         with jobs.transaction() as conn:
             conn.execute('UPDATE jobs SET available=0 WHERE id=?',(job_id,))
@@ -36,17 +48,17 @@ class JobTests(unittest.TestCase):
         first = jobs.enqueue('manual', {}, dedupe_key='one')
         self.assertEqual(jobs.enqueue('manual', {}, dedupe_key='one'), first)
         with ThreadPoolExecutor(2) as pool:
-            claimed = list(pool.map(jobs.claim, ['a','b']))
+            claimed = list(pool.map(self.claim, ['a','b']))
         self.assertEqual(sum(job is not None for job in claimed), 1)
 
     def test_retry_after_crash_and_fencing(self):
         job_id = jobs.enqueue('manual', {})
-        old = jobs.claim('old')
-        self.assertEqual(jobs.recover_stale(now=time.time()+60),1)
+        old = self.claim('old')
+        self.assertEqual(self.expire(job_id),1)
         self.assertEqual(jobs.get_job(job_id)['state'],'queued')
         self.assertFalse(jobs.complete(job_id,'old',{'bad':True}))
         self.due(job_id)
-        current = jobs.claim('new')
+        current = self.claim('new')
         self.assertEqual(current['attempts'],2)
         self.assertTrue(jobs.complete(job_id,'new',{'valid':True}))
         self.assertEqual(jobs.get_job(job_id)['result'],{'valid':True})
@@ -55,23 +67,23 @@ class JobTests(unittest.TestCase):
         job_id=jobs.enqueue('manual', {})
         for _ in range(3):
             self.due(job_id)
-            jobs.claim('worker')
+            self.claim('worker')
             jobs.fail(job_id,'worker','network')
         self.assertEqual(jobs.get_job(job_id)['state'],'failed')
-        self.assertIsNone(jobs.claim('worker'))
+        self.assertIsNone(self.claim('worker'))
 
     def test_uncertain_message_is_not_resent_automatically(self):
         job_id=jobs.enqueue('automation', {})
-        jobs.claim('worker')
+        self.claim('worker')
         jobs.mark_effects_started(job_id,'worker')
-        jobs.recover_stale(time.time()+60)
+        self.expire(job_id)
         self.assertEqual(jobs.get_job(job_id)['state'],'needs_attention')
         self.due(job_id)
-        self.assertIsNone(jobs.claim('other'))
+        self.assertIsNone(self.claim('other'))
 
     def test_expired_owner_cannot_send(self):
         job_id=jobs.enqueue('automation', {})
-        jobs.claim('worker')
+        self.claim('worker')
         with jobs.transaction() as conn:
             conn.execute('UPDATE jobs SET lease_until=0 WHERE id=?',(job_id,))
         with self.assertRaises(RuntimeError):
@@ -79,9 +91,9 @@ class JobTests(unittest.TestCase):
 
     def test_history_retains_previous_result(self):
         first=jobs.enqueue('manual', {'thread_id':'group'})
-        jobs.claim('a'); jobs.complete(first,'a',{'links':[]})
+        self.claim('a'); jobs.complete(first,'a',{'links':[]})
         second=jobs.enqueue('manual', {'thread_id':'group'},parent_id=first)
-        jobs.claim('b'); jobs.complete(second,'b',{'links':[{'post_link':'new'}]})
+        self.claim('b'); jobs.complete(second,'b',{'links':[{'post_link':'new'}]})
         self.assertEqual(len(jobs.history()),2)
         self.assertEqual(jobs.get_job(first)['result'],{'links':[]})
 
@@ -102,31 +114,12 @@ class JobTests(unittest.TestCase):
         with patch('app_core.login_limits.time.time',return_value=time.time()+1000):
             self.assertEqual(reserve_attempt('ip'),0)
 
-    def test_scheduler_keeps_one_job_per_slot(self):
-        import datetime, pytz
-        now=pytz.timezone('Europe/Istanbul').localize(datetime.datetime(2026,9,9,10,0))
-        with patch.object(storage,'get_global_automation_status',return_value=True), patch.object(storage,'get_global_automation_settings',return_value={'times':'09:00,11:00'}), patch('app_core.automation.load_automations',return_value={'group':{'is_active':True}}):
-            worker.schedule_due(now); worker.schedule_due(now)
-        self.assertEqual(len(jobs.history()),1)
-        job=jobs.claim('a')
-        jobs.fail(job['id'],'a','temporary')
-        self.due(job['id'])
-        self.assertEqual(jobs.claim('b')['id'],job['id'])
-
     def test_manual_execution_persists_result(self):
         job_id=jobs.enqueue('manual', {'link':'url','grup_uye':'alice','thread_id':'group','post_senders_raw':[],'check_likes':False})
-        job=jobs.claim('a')
+        job=self.claim('a')
         with patch('app_core.routes.main.run_manual_control',return_value={'links':[]}):
-            worker.execute(job)
+            execute_claimed(job)
         self.assertEqual(jobs.get_job(job_id)['state'],'completed')
-
-    def test_standalone_worker_process_failure_is_recoverable(self):
-        job_id=jobs.enqueue('invalid-test-kind',{})
-        result=subprocess.run([sys.executable,'-B','worker.py','--once'],cwd=Path(__file__).resolve().parents[1],
-            env={**os.environ,'APP_DB_FILE':self.db},capture_output=True,text=True,timeout=30)
-        self.assertEqual(result.returncode,0,result.stderr)
-        self.assertEqual(jobs.get_job(job_id)['state'],'queued')
-        self.assertEqual(jobs.get_job(job_id)['attempts'],1)
 
     def test_web_queues_without_calling_instagram(self):
         with patch('app_core.init_storage'):
@@ -141,7 +134,7 @@ class JobTests(unittest.TestCase):
         self.assertNotEqual(first.location,second.location)
         self.assertEqual(len(jobs.history()),2)
         self.assertEqual(client.get('/history').status_code,200)
-        self.assertEqual(client.get(first.location).status_code,200)
+        self.assertEqual(client.get(first.location,follow_redirects=True).status_code,200)
 
     def test_login_throttle_response(self):
         with patch('app_core.init_storage'): app=create_app()
@@ -169,15 +162,15 @@ class JobTests(unittest.TestCase):
 
     def test_automation_preflight_failure_is_retried(self):
         job_id=jobs.enqueue('automation', {'thread_id':'group'})
-        job=jobs.claim('a')
+        job=self.claim('a')
         with patch('app_core.token_service.get_working_active_token', return_value=None):
-            worker.execute(job)
+            execute_claimed(job)
         self.assertEqual(jobs.get_job(job_id)['state'],'queued')
         self.assertFalse(jobs.get_job(job_id)['effects_started'])
 
     def test_recheck_creates_new_record_and_preserves_old(self):
         source=jobs.enqueue('manual',{'link':'url','grup_uye':'alice','thread_id':'g','post_senders_raw':[],'check_likes':False})
-        jobs.claim('a');jobs.complete(source,'a',{'links':[]})
+        self.claim('a');jobs.complete(source,'a',{'links':[]})
         with patch('app_core.init_storage'):app=create_app()
         app.config.update(TESTING=True,SESSION_COOKIE_SECURE=False)
         client=app.test_client()
@@ -191,7 +184,7 @@ class JobTests(unittest.TestCase):
 
     def test_uncertain_retry_requires_explicit_acknowledgment(self):
         source=jobs.enqueue('automation',{'thread_id':'group'})
-        jobs.claim('a');jobs.mark_effects_started(source,'a');jobs.fail(source,'a','unknown')
+        self.claim('a');jobs.mark_effects_started(source,'a');jobs.fail(source,'a','unknown')
         with patch('app_core.init_storage'):app=create_app()
         app.config.update(TESTING=True,SESSION_COOKIE_SECURE=False)
         client=app.test_client()

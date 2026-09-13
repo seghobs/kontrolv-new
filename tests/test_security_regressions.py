@@ -42,7 +42,7 @@ class SecurityTests(unittest.TestCase):
 
     def test_only_configured_password_works(self):
         with patch.object(admin, "ADMIN_PASSWORD", "configured-password"):
-            for password in ("seho", "segho", "wrong", "configured-password"):
+            for password in ("legacy-invalid-password", "segho", "wrong", "configured-password"):
                 client = self.app.test_client()
                 response = client.post("/admin/login", data={"password": password})
                 self.assertEqual(response.status_code, 302 if password == "configured-password" else 200)
@@ -55,11 +55,17 @@ class SecurityTests(unittest.TestCase):
             with self.client.session_transaction() as session:
                 self.assertFalse(session.get("admin_logged_in"))
 
-    def test_private_routes_require_login(self):
-        for url in ("/api/get_groups", "/api/get_group_members/123", "/api/get_group_posts/123", "/api/proxy_image"):
-            self.assertEqual(self.client.get(url).status_code, 401)
-        self.assertEqual(self.client.get("/").location, "/admin/login")
-        self.assertEqual(self.client.post("/add_exemption", json={}).status_code, 401)
+    def test_only_admin_routes_require_login(self):
+        self.assertEqual(self.client.get('/admin').location, '/admin/login')
+        self.assertEqual(self.client.get('/debug_logs').status_code, 401)
+        self.assertEqual(self.client.get('/debug_db/test').status_code, 401)
+        self.assertEqual(self.client.get('/').status_code, 200)
+        with patch.object(main, 'fetch_group_threads_with_failover', return_value={'ok': True, 'groups': []}):
+            self.assertEqual(self.client.get('/api/get_groups').json, {'ok': True, 'groups': []})
+        with patch('app_core.jobs.enqueue', return_value='public-test-job') as enqueue:
+            response = self.client.post('/', data={'post_link': 'https://www.instagram.com/p/ABC123/', 'grup_uye': 'alice'})
+            self.assertEqual(response.location, '/result/public-test-job')
+            enqueue.assert_called_once()
 
     def test_authenticated_group_access(self):
         self.login()
@@ -100,21 +106,11 @@ class SecurityTests(unittest.TestCase):
             stack.enter_context(patch.object(main, "get_global_exempted_users", return_value=set()))
             stack.enter_context(patch.object(main, "get_exempted_users", return_value=set()))
             stack.enter_context(patch.object(main, "add_audit_log"))
-            stack.enter_context(patch.object(instagram, "get_post_details_async", new=AsyncMock(return_value={"like_count": 73, "comment_count": 24})))
-            stack.enter_context(patch.object(instagram, "fetch_liker_usernames_async", new=AsyncMock(return_value={"ok": True, "usernames": {"alice"}})))
+            stack.enter_context(patch.object(instagram, "get_post_details_async", new=AsyncMock(return_value={"like_count": 73, "like_count_verified": True, "comment_count": 24})))
+            stack.enter_context(patch.object(instagram, "fetch_liker_usernames_async", new=AsyncMock(return_value={"ok": True, "usernames": {"alice"} | {f"other{i}" for i in range(72)}})))
             result = main.run_manual_control("https://www.instagram.com/p/ABC123/", "alice bob", "", [], True)
             self.assertEqual(result["links"][0]["like_count"], 73)
             self.assertEqual(result["links"][0]["comment_count"], 24)
-
-    def test_failed_background_run_records_failure_without_result(self):
-        import json
-        inputs = {"link": "https://www.instagram.com/p/ABC123/", "grup_uye": "alice", "thread_id": ""}
-        with patch.object(main, "get_db_value", return_value=json.dumps(inputs)), patch.object(main, "set_db_value") as write, patch.object(main, "run_manual_control", side_effect=main.ControlUnavailable("Kontrol edilemedi")):
-            main.run_manual_control_async("ABC123")
-            self.assertEqual(write.call_count, 1)
-            key, value = write.call_args.args
-            self.assertEqual(key, "task_status_ABC123")
-            self.assertEqual(json.loads(value)["status"], "failed")
 
     def test_sync_fallback_error_does_not_create_results(self):
         with ExitStack() as stack:

@@ -1,4 +1,4 @@
-"""Persistent job queue. Only the standalone worker executes jobs."""
+"""Persistent request execution records, results and retry protection."""
 import json
 import time
 import uuid
@@ -20,10 +20,7 @@ def init_schema(conn):
         CREATE TABLE IF NOT EXISTS login_attempts (
             client TEXT PRIMARY KEY, failures INTEGER NOT NULL, expires REAL NOT NULL
         );
-        CREATE TABLE IF NOT EXISTS workers (
-            owner TEXT PRIMARY KEY, last_seen REAL NOT NULL, job_id TEXT,
-            stopped INTEGER NOT NULL DEFAULT 0
-        );
+
     ''')
 
 
@@ -60,6 +57,17 @@ def get_job(job_id):
         conn.close()
 
 
+def get_job_state(job_id):
+    """Read status without transferring stored inputs or comment results."""
+    from app_core.storage import _connect
+    conn = _connect()
+    try:
+        row = conn.execute('SELECT id,kind,state,owner,lease_until,progress,message,error,attempts FROM jobs WHERE id=?', (job_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
 def enqueue(kind, payload, *, dedupe_key=None, parent_id=None, job_id=None):
     now = time.time()
     job_id = job_id or uuid.uuid4().hex
@@ -72,7 +80,7 @@ def enqueue(kind, payload, *, dedupe_key=None, parent_id=None, job_id=None):
             (id,kind,payload,created,updated,available,dedupe_key,parent_id,message)
             VALUES (?,?,?,?,?,?,?,?,?)''',
             (job_id, kind, json.dumps(payload, ensure_ascii=False), now, now, now,
-             dedupe_key, parent_id, 'İşçi bekleniyor; denetim sırada.'))
+             dedupe_key, parent_id, 'Denetim başlatılmaya hazır.'))
     return job_id
 
 
@@ -87,34 +95,23 @@ def _fail(conn, row, error, now):
                   now, now + delay, row['id']))
 
 
-def recover_stale(now=None):
-    now = time.time() if now is None else now
-    with transaction() as conn:
-        rows = conn.execute("SELECT * FROM jobs WHERE state='running' AND lease_until<?", (now,)).fetchall()
-        for row in rows:
-            _fail(conn, row, 'İşçi kesildi veya süre aşımı oluştu.', now)
-        conn.execute("""UPDATE jobs SET state='cancelled',owner=NULL,lease_until=NULL,
-            message='Denetim iptal edildi; işçi sahipliği sona erdi.',updated=?
-            WHERE state='cancelling' AND lease_until<?""", (now,now))
-    return len(rows)
-
-
-def claim(owner, lease_seconds=30):
+def claim_request(job_id, owner, lease_seconds=170):
     now = time.time()
     with transaction() as conn:
-        row = conn.execute("SELECT * FROM jobs WHERE state='queued' AND available<=? ORDER BY created LIMIT 1", (now,)).fetchone()
+        row = conn.execute('SELECT * FROM jobs WHERE id=?', (job_id,)).fetchone()
         if not row:
             return None
-        conn.execute('''UPDATE jobs SET state='running', attempts=attempts+1, owner=?,
-            lease_until=?,updated=?,message='Denetim başladı.',error=NULL WHERE id=?''',
-            (owner, now + lease_seconds, now, row['id']))
-        return _decode(conn.execute('SELECT * FROM jobs WHERE id=?', (row['id'],)).fetchone())
-
-
-def heartbeat(job_id, owner):
-    with transaction() as conn:
-        return conn.execute("UPDATE jobs SET lease_until=?,updated=? WHERE id=? AND owner=? AND state='running'",
-                            (time.time()+30, time.time(), job_id, owner)).rowcount == 1
+        if row['state'] == 'cancelling' and (row['lease_until'] or 0) < now:
+            conn.execute("UPDATE jobs SET state='cancelled',owner=NULL,lease_until=NULL,message='Denetim iptal edildi.',updated=? WHERE id=?", (now,job_id))
+            return None
+        if row['state'] == 'running' and (row['lease_until'] or 0) < now:
+            _fail(conn, row, 'Denetim isteği kesildi veya süresi doldu.', now)
+            row = conn.execute('SELECT * FROM jobs WHERE id=?', (job_id,)).fetchone()
+        if row['state'] != 'queued' or row['available'] > now:
+            return None
+        conn.execute("UPDATE jobs SET state='running',owner=?,lease_until=?,updated=?,attempts=attempts+1,message='Denetim başladı.' WHERE id=?",
+                     (owner,now+lease_seconds,now,job_id))
+        return _decode(conn.execute('SELECT * FROM jobs WHERE id=?', (job_id,)).fetchone())
 
 
 def progress(job_id, owner, current, total, message):
@@ -143,14 +140,14 @@ def mark_effects_started(job_id, owner):
         changed = conn.execute('''UPDATE jobs SET effects_started=1 WHERE id=? AND owner=?
             AND state='running' AND lease_until>?''', (job_id, owner, time.time())).rowcount
         if not changed:
-            raise RuntimeError('İşçi sahipliği sona erdi; mesaj gönderimi durduruldu.')
+            raise RuntimeError('Denetim isteğinin süresi doldu; mesaj gönderimi durduruldu.')
 
 
 def public_status(job):
     state = job['state']
     return {'status': 'running' if state in ('queued','running','cancelling') else
                      'failed' if state == 'needs_attention' else state,
-            'queue_state': state, 'progress': job['progress'], 'message': job['message'],
+            'queue_state': state, 'progress': job['progress'], 'message': ('Denetim başlatılmaya hazır.' if state == 'queued' and 'İşçi' in (job['message'] or '') else job['message']),
             'error': job['error'], 'attempts': job['attempts']}
 
 
@@ -214,38 +211,17 @@ def cancel(job_id):
         if row['state'] not in ('queued', 'running'):
             return 'conflict'
         state = 'cancelled' if row['state'] == 'queued' else 'cancelling'
-        message = 'Denetim iptal edildi.' if state == 'cancelled' else 'İptal istendi; işçinin durması bekleniyor.'
+        message = 'Denetim iptal edildi.' if state == 'cancelled' else 'İptal istendi; devam eden isteğin bitmesi bekleniyor.'
         conn.execute('UPDATE jobs SET state=?,message=?,error=NULL,updated=? WHERE id=?',
                      (state,message,time.time(),job_id))
         return state
 
 
 def finish_cancel(job_id, owner):
-    """Called by supervisor only after its child process has stopped."""
+    """Finalize cancellation after the request has stopped executing."""
     with transaction() as conn:
         return conn.execute("""UPDATE jobs SET state='cancelled',owner=NULL,lease_until=NULL,
             message='Denetim iptal edildi.',updated=? WHERE id=? AND owner=? AND state='cancelling'""",
             (time.time(),job_id,owner)).rowcount == 1
 
 
-def worker_presence(owner, job_id=None, stopped=False):
-    with transaction() as conn:
-        conn.execute('''INSERT INTO workers(owner,last_seen,job_id,stopped) VALUES (?,?,?,?)
-            ON CONFLICT(owner) DO UPDATE SET last_seen=excluded.last_seen,
-            job_id=excluded.job_id,stopped=excluded.stopped''', (owner,time.time(),job_id,int(stopped)))
-        conn.execute('DELETE FROM workers WHERE last_seen<?', (time.time()-7*86400,))
-
-
-def worker_status():
-    from app_core.storage import _connect
-    conn = _connect()
-    try:
-        now = time.time()
-        live = conn.execute('SELECT COUNT(*) FROM workers WHERE stopped=0 AND last_seen>=?', (now-30,)).fetchone()[0]
-        last = conn.execute('SELECT MAX(last_seen) FROM workers').fetchone()[0]
-        counts = dict(conn.execute('SELECT state,COUNT(*) FROM jobs GROUP BY state').fetchall())
-        return {'online': bool(live), 'online_workers': live, 'last_seen': last,
-                'queued': counts.get('queued',0), 'running': counts.get('running',0),
-                'cancelling': counts.get('cancelling',0)}
-    finally:
-        conn.close()

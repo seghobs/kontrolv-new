@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '../static/js/result.js'), 'utf8');
-const code = source.slice(source.indexOf('function showCommentModal('), source.indexOf('function closeCommentModal('));
+const code = source.slice(source.indexOf('function renderCommentModal('), source.indexOf('function closeCommentModal('));
 function element() {
     return {
         style: {}, children: [], textContent: '', classList: {add() {}},

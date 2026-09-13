@@ -349,7 +349,7 @@ function filterEksiklerList(index) {
     const list = document.getElementById(`eksiklerListesi-${index}`);
     if (!list) return;
     
-    const card = list.closest('.link-card');
+    const card = list.closest('.sortable-main-card');
     if (!card) return;
     
     const inputEl = card.querySelector(".search-input");
@@ -359,8 +359,9 @@ function filterEksiklerList(index) {
     for (let i = 0; i < listItems.length; i += 1) {
 
         const item = listItems[i];
-        const textValue = item.innerText.toLowerCase();
-        item.style.display = textValue.includes(input) ? "" : "none";
+        const textValue = (item.dataset.username || item.textContent).toLowerCase();
+        if (textValue.includes(input.trim().replace(/^@/, ''))) item.style.removeProperty('display');
+        else item.style.setProperty('display', 'none', 'important');
     }
 
     updateEksiklerCount(index);
@@ -374,8 +375,9 @@ function filterCompletedList() {
 
     for (let i = 0; i < listItems.length; i += 1) {
         const item = listItems[i];
-        const textValue = item.innerText.toLowerCase();
-        item.style.display = textValue.includes(input) ? "" : "none";
+        const textValue = (item.dataset.username || item.textContent).toLowerCase();
+        if (textValue.includes(input.trim().replace(/^@/, ''))) item.style.removeProperty('display');
+        else item.style.setProperty('display', 'none', 'important');
     }
 }
 
@@ -514,7 +516,7 @@ function refreshResults() {
     }
 }
 
-function showCommentModal(username) {
+function renderCommentModal(username) {
     const comments = (window.userComments && window.userComments[username.toLowerCase()]) || [];
     const usernameSpan = document.getElementById("commentModalUsername");
     const contentBlock = document.getElementById("commentModalContent");
@@ -531,13 +533,13 @@ function showCommentModal(username) {
         if (comments.length === 0) {
             contentBlock.textContent = "(Yorum içeriği bulunamadı)";
         } else if (comments.length === 1) {
-            contentBlock.textContent = comments[0];
+            contentBlock.textContent = comments[0] || 'Yorum mevcut; metni alınamadı.';
         } else {
             contentBlock.replaceChildren();
             comments.forEach((comment, index) => {
                 const row = document.createElement("div");
                 row.style.marginBottom = index === comments.length - 1 ? "0" : "10px";
-                row.textContent = `${index + 1}. ${comment}`;
+                row.textContent = `${index + 1}. ${comment || 'Yorum mevcut; metni alınamadı.'}`;
                 contentBlock.appendChild(row);
             });
         }
@@ -549,7 +551,39 @@ function showCommentModal(username) {
     }
 }
 
+let commentRequestVersion = 0;
+async function showCommentModal(username) {
+    const version = ++commentRequestVersion;
+    const key = username.trim().replace(/^@/, '').toLowerCase();
+    window.userComments ||= {};
+    if (!window.userComments[key]?.length) {
+        const saved = Object.values(window.postDetailsData || {}).flatMap(post => post.comments_list || []);
+        const matches = saved.filter(c => (c.username || '').toLowerCase() === key).map(c => c.text).filter(Boolean);
+        if (matches.length) window.userComments[key] = matches;
+    }
+    renderCommentModal(key);
+    if (window.userComments[key]?.length) return;
+    const content = document.getElementById('commentModalContent');
+    if (content) content.textContent = 'Yorumlar yükleniyor…';
+    try {
+        const comments = [];
+        for (const post of Object.values(window.postDetailsData || {})) {
+            if (!post.link) continue;
+            const response = await fetch(`/api/get_post_interactions?link=${encodeURIComponent(post.link)}&type=comments`);
+            const data = await response.json();
+            if (!response.ok || !data.ok) throw new Error('Yorumlar alınamadı. Lütfen tekrar deneyin.');
+            post.comments_list = data.comments || [];
+            comments.push(...post.comments_list.filter(c => (c.username || '').toLowerCase() === key).map(c => c.text).filter(Boolean));
+        }
+        window.userComments[key] = comments;
+        if (version === commentRequestVersion) renderCommentModal(key);
+    } catch (error) {
+        if (version === commentRequestVersion && content) content.textContent = error.message;
+    }
+}
+
 function closeCommentModal() {
+    commentRequestVersion++;
     const modal = document.getElementById("commentDetailModal");
     if (modal) {
         modal.classList.remove("show");
@@ -996,6 +1030,10 @@ function closePostDetailsModal() {
 let currentInteractionsData = [];
 let currentInteractionsType = 'comments';
 
+function escapeInteractionText(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+}
+
 function openInteractionsModal(type) {
     const data = window.postDetailsData && window.currentActivePostIndex ? window.postDetailsData[window.currentActivePostIndex] : null;
     if (!data) return;
@@ -1029,15 +1067,16 @@ function openInteractionsModal(type) {
             listContainer.innerHTML = `
                 <div class="text-center py-4" style="color: var(--muted-foreground); font-size: 13.5px;">
                     <i class="fas fa-info-circle mb-2" style="font-size: 24px; color: var(--accent-caramel); display: block;"></i>
-                    ${type === 'likes' ? 'Bu gönderi için henüz beğeni kaydı bulunamadı.' : 'Bu gönderide henüz yorum bulunamadı.'}
+                    ${type === 'likes' ? (Number(data.like_count || 0) > 0 ? 'Instagram beğenenlerin listesini döndürmedi. Bu durum beğeni olmadığı anlamına gelmez.' : 'Bu gönderi için henüz beğeni kaydı bulunamadı.') : 'Bu gönderide henüz yorum bulunamadı.'}
                 </div>`;
             return;
         }
         
-        let html = '';
+        let html = type === 'likes' && items.length < Number(data.like_count || 0)
+            ? '<p role="status" style="color: var(--accent-caramel); font-size: 13px;">Instagram beğenenlerin yalnız bir kısmını döndürdü. Bu listede bulunmayan kişinin beğenmediği kesin değildir.</p>' : '';
         if (type === 'likes') {
             items.forEach((item) => {
-                const uname = typeof item === 'string' ? item : (item.username || '');
+                const uname = escapeInteractionText(typeof item === 'string' ? item : (item.username || ''));
                 html += `
                     <div class="interaction-item d-flex align-items-center justify-content-between" data-search="${uname.toLowerCase()}" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(196, 149, 106, 0.15); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; transition: all 0.2s ease;">
                         <div class="d-flex align-items-center gap-2">
@@ -1055,8 +1094,8 @@ function openInteractionsModal(type) {
             });
         } else {
             items.forEach((item) => {
-                const uname = item.username || 'Kullanıcı';
-                const text = item.text || '';
+                const uname = escapeInteractionText(item.username || 'Kullanıcı');
+                const text = escapeInteractionText(item.text || '');
                 html += `
                     <div class="interaction-item" data-search="${uname.toLowerCase()} ${text.toLowerCase()}" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(196, 149, 106, 0.15); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; transition: all 0.2s ease;">
                         <div class="d-flex align-items-center justify-content-between mb-1">
@@ -1113,7 +1152,7 @@ function openInteractionsModal(type) {
                     listContainer.innerHTML = `
                         <div class="text-center py-4" style="color: #f87171; font-size: 13px;">
                             <i class="fas fa-exclamation-triangle mb-2" style="font-size: 20px; display: block;"></i>
-                            ${res.error || 'Veri yüklenemedi.'}
+                            ${escapeInteractionText(res.error || 'Veri yüklenemedi.')}
                         </div>`;
                 }
             }
