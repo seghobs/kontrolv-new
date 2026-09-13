@@ -8,6 +8,15 @@ from app_core import create_app
 
 class ResultDeliveryTests(unittest.TestCase):
     def setUp(self):
+        from app_core import storage
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        database = patch.object(storage, 'DB_FILE', str(Path(temporary.name) / 'test.db'))
+        database.start()
+        self.addCleanup(database.stop)
+        with storage._connect() as connection:
+            storage._init_db(connection)
+        connection.close()
         with patch("app_core.init_storage"):
             self.app = create_app()
         self.app.config.update(TESTING=True, SESSION_COOKIE_SECURE=False)
