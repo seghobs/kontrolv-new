@@ -47,3 +47,8 @@ tokens.json
 .mysql-enabled
 
 .web-manual-execution
+
+# Local installer state
+.pythonanywhere-setup.json
+.kontrol-setup.lock
+.kontrol-backups/

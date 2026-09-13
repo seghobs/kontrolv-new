@@ -27,6 +27,27 @@ Yönetici şifresini `ADMIN_PASSWORD` ortam değişkeniyle belirleyin. Değişke
 
 ## PythonAnywhere ücretsiz hesap
 
+PythonAnywhere Bash konsolunda, proje klasöründeyken otomatik kurulum:
+
+```sh
+bash setup.sh
+```
+
+Proje henüz indirilmediyse:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/seghobs/kontrolv-new/main/setup.sh -o /tmp/kontrol-setup.sh
+bash /tmp/kontrol-setup.sh --path "$HOME/mysite"
+```
+
+Kurulum hesabın `API_TOKEN` ortam değişkenini kullanır. Token yoksa gizli giriş ister. Tokenı **Account > API token** sayfasında oluşturduktan sonra yeni bir Bash konsolu açabilirsiniz. Avrupa hesabında gerekirse `--api-host eu.pythonanywhere.com` ekleyin.
+
+Betik mevcut SQLite dosyasını ve anahtarları korur; veritabanını SQLite yedekleme yöntemiyle `$HOME/.kontrol-backups/` altında yedekler. Uyumlu sanal ortamı hazırlar, bağımlılıkları kurar, uygulama açılışını test eder, web uygulaması/WSGI/statik dosya ayarlarını yapar ve yayını doğrular. Yeniden çalıştırma mevcut web uygulamasını ve statik eşlemesini kullanır. Mevcut proje kodu zorla güncellenmez veya klasör silinmez.
+
+Birden çok veritabanı varsa aktif WSGI ayarı kullanılır; ayar bulunamazsa betik tahmin etmek yerine `--database /tam/yol` ister. Eksik API yetkisi, uygun olmayan Python sürümü veya aktif denetim varsa anlaşılır hata verip durur. `bash setup.sh --check` yalnız ön kontrol yapar. Paket indirme ve servis bağlantısı sorunlarında kurulum tamamlanmış gibi gösterilmez. Mevcut şifre `admin_password.txt` içinde kalır; eski WSGI içindeki açık şifre/anahtar ayarları da korunur.
+
+API davranışları: [PythonAnywhere resmi API dokümanı](https://help.pythonanywhere.com/pages/API/).
+
 Kontroller web isteği içinde çalışır; ayrı worker veya Always-on Task gerekmez. Gözetimsiz saatli otomasyon kapalıdır. Yönetim panelindeki mesaj gönderen işlemler yalnız kullanıcı tarafından başlatılır.
 
 - `APP_DB_FILE` ortam değişkenini mevcut SQLite dosyanızın tam yoluna ayarlayın. Varsayılan dosya proje içindeki `app.db` dosyasıdır.
