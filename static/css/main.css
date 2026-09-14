@@ -1810,3 +1810,14 @@ textarea.form-control {
     box-shadow: 0 5px 15px rgba(196, 149, 106, 0.5);
 }
 
+
+
+/* Form utilities share the existing coffee card and input palette. */
+#checkForm .control-utility{display:block;margin:0 0 12px;border:1px solid rgba(196,149,106,.25);border-radius:14px;background:linear-gradient(120deg,rgba(57,42,29,.5),rgba(22,17,13,.65));color:var(--foreground);text-decoration:none;overflow:hidden}
+#checkForm .control-resume,#checkForm .control-extractor>summary{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;list-style:none;color:var(--foreground);text-decoration:none}
+#checkForm .control-extractor>summary::-webkit-details-marker{display:none}
+#checkForm .control-utility-icon{display:grid;place-items:center;flex-shrink:0;width:34px;height:34px;border:1px solid rgba(196,149,106,.25);border-radius:10px;background:rgba(196,149,106,.08);color:var(--accent-caramel);font-size:14px}
+#checkForm .control-utility-copy{min-width:0;flex:1}#checkForm .control-utility-copy strong{display:block;font-size:12px;font-weight:700;line-height:1.5}#checkForm .control-utility-copy small{display:block;color:var(--muted-foreground);font-size:10px;line-height:1.6;margin-top:2px}
+#checkForm .control-utility-arrow{color:var(--accent-caramel);font-size:11px;flex-shrink:0}#checkForm .control-resume:hover,#checkForm .control-extractor>summary:hover{background:rgba(196,149,106,.08);color:var(--foreground)}#checkForm .control-extractor[open]>summary{border-bottom:1px solid var(--border)}#checkForm .control-extractor[open] .control-utility-arrow{transform:rotate(180deg)}
+#checkForm .control-extractor-body{padding:16px}#checkForm .control-extractor-body label{font-size:12px;color:var(--muted-foreground);margin-bottom:8px}#checkForm .control-extractor-body textarea{min-height:110px;margin-bottom:12px;resize:vertical}#checkForm .control-extractor-body button{font-size:12px;padding:10px 14px}#checkForm [data-extract-status]{font-size:11px;color:var(--accent-caramel);margin:10px 0 0}#checkForm [data-extract-status]:empty{display:none}#checkForm .control-utility:focus-visible,#checkForm .control-extractor>summary:focus-visible{outline:2px solid var(--accent-caramel);outline-offset:3px}
+@media(max-width:480px){#checkForm .control-resume,#checkForm .control-extractor>summary{padding:12px;gap:10px}#checkForm .control-extractor-body button{width:100%}}
