@@ -46,7 +46,7 @@ class MemberAnalysisTests(unittest.TestCase):
     def test_target_comments_and_failure_are_distinct(self):
         row=self.scan(False,{'ok':True,'comments':[('bob','other'),('alice','my comment')]})
         self.assertEqual(row['state'],'present');self.assertEqual(row['comments'],['my comment'])
-        self.assertEqual(self.scan(False,{'ok':True,'comments':[]})['state'],'missing')
+        self.assertEqual(self.scan(False,{'ok':True,'comments':[]},{'comment_count':0,'comment_count_verified':True})['state'],'missing')
         self.assertEqual(self.scan(False,{'ok':False,'comments':[]})['state'],'unknown')
     def test_high_like_count_is_checked_and_partial_lists_are_unknown(self):
         self.assertEqual(self.scan(True,{'ok':True,'usernames':['alice']},{'like_count':200})['state'],'present')

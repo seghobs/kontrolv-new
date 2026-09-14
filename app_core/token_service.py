@@ -90,11 +90,11 @@ def get_working_active_token(excluded_usernames=None, skip_validation=False):
         if not skip_validation:
             current_time = datetime.now().timestamp()
             last_val = _last_validation_times.get(username, 0)
-            
+
             if current_time - last_val > 300: # 300 seconds = 5 minutes
                 from app_core.instagram_api import validate_token
                 is_valid = validate_token(token_record)
-                if not is_valid:
+                if is_valid is False:
                     logger.info("Token expired/invalid: @%s. Self-healing baslatiliyor...", username)
                     healed = handle_invalid_token(username, "Token sure doldu veya gecersiz")
                     if healed:
@@ -103,10 +103,13 @@ def get_working_active_token(excluded_usernames=None, skip_validation=False):
                         if refreshed_record and refreshed_record.get("is_active", False):
                             _last_validation_times[username] = datetime.now().timestamp()
                             return refreshed_record
-                    
+
                     excluded_usernames.add(username)
                     continue
-                _last_validation_times[username] = current_time
+                if is_valid is True:
+                    _last_validation_times[username] = current_time
+                else:
+                    token_record['_validation_status'] = 'unknown'
 
         return token_record
 
@@ -117,7 +120,7 @@ def fetch_comments_with_failover(media_id, progress_callback=None, token_record=
     tried_usernames = set()
     comments_data = []
     last_was_rate_limited = False
-    
+
     if token_record is None:
         token_record = get_working_active_token()
 
@@ -176,7 +179,7 @@ def fetch_likers_with_failover(media_id, progress_callback=None, token_record=No
     tried_usernames = set()
     usernames = set()
     last_was_rate_limited = False
-    
+
     if token_record is None:
         token_record = get_working_active_token()
 
@@ -392,7 +395,7 @@ def fetch_group_threads_with_failover(token_record=None):
     max_retries = 3
     retry_count = 0
     tried_usernames = set()
-    
+
     if token_record is None:
         token_record = get_working_active_token()
 
@@ -409,7 +412,7 @@ def fetch_group_threads_with_failover(token_record=None):
 
         error_msg = str(result.get("error", ""))
         is_auth_error = result.get("invalid_session") is True
-        
+
         if is_auth_error:
             logger.info("Direct Inbox (@%s) Auth Hatası aldı. Self-healing baslatiliyor...", current_username)
             healed = handle_invalid_token(current_username, f"Inbox Auth Hatasi: {error_msg}")
@@ -437,7 +440,7 @@ def fetch_group_members_with_failover(thread_id, token_record=None):
     max_retries = 3
     retry_count = 0
     tried_usernames = set()
-    
+
     if token_record is None:
         token_record = get_working_active_token()
 
@@ -454,7 +457,7 @@ def fetch_group_members_with_failover(thread_id, token_record=None):
 
         error_msg = str(result.get("error", ""))
         is_auth_error = result.get("invalid_session") is True
-        
+
         if is_auth_error:
             logger.info("Direct Members (@%s) Auth Hatası aldı. Self-healing baslatiliyor...", current_username)
             healed = handle_invalid_token(current_username, f"Members Auth Hatasi: {error_msg}")
@@ -482,7 +485,7 @@ def fetch_group_media_with_failover(thread_id, target_date, token_record=None, c
     max_retries = 3
     retry_count = 0
     tried_usernames = set()
-    
+
     if token_record is None:
         token_record = get_working_active_token()
 
@@ -499,7 +502,7 @@ def fetch_group_media_with_failover(thread_id, target_date, token_record=None, c
 
         error_msg = str(result.get("error", ""))
         is_auth_error = result.get("invalid_session") is True
-        
+
         if is_auth_error:
             logger.info("Direct Media (@%s) Auth Hatası aldı. Self-healing baslatiliyor...", current_username)
             healed = handle_invalid_token(current_username, f"Media Auth Hatasi: {error_msg}")

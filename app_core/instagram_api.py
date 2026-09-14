@@ -12,6 +12,11 @@ logger = logging.getLogger(__name__)
 MAX_COMMENT_PAGES = 50
 
 
+def comments_cover_total(details, comments):
+    count = (details or {}).get('comment_count')
+    return bool((details or {}).get('comment_count_verified') and type(count) is int and count >= 0 and len(comments) >= count)
+
+
 def parse_comment_page(body):
     """Keep attributable comments; never turn malformed/anonymous data into absence."""
     records = set()
@@ -37,7 +42,16 @@ def parse_comment_page(body):
         if not isinstance(comments, list):
             incomplete = True
             continue
-        for comment in comments:
+        pending = list(comments)
+        for comment in pending:
+            if isinstance(comment, dict):
+                replies = comment.get('preview_child_comments', [])
+                if isinstance(replies, list):
+                    pending.extend(replies)
+                    child_count = comment.get('child_comment_count')
+                    if type(child_count) is int and child_count > len(replies): incomplete = True
+                else:
+                    incomplete = True
             user = comment.get('user') if isinstance(comment, dict) else None
             name = user.get('username') if isinstance(user, dict) else None
             if not isinstance(name, str) or not name.strip():
@@ -52,6 +66,46 @@ def parse_comment_page(body):
             records.add((name.strip(), text if isinstance(text, str) else ''))
     return last, records, incomplete or not saw_comments
 
+class PersistedSession(requests.Session):
+    def prepare_request(self, request):
+        # Prepare an isolated view; concurrent requests never mutate shared defaults.
+        import copy
+        from http.cookies import SimpleCookie
+        from urllib.parse import urlsplit
+        from app_core.session_state import get_session
+        state = get_session(self.account_username)
+        scoped = copy.copy(self)
+        scoped.cookies = requests.cookies.RequestsCookieJar()
+        if 'http_cookies' in state:
+            for cookie in state['http_cookies']:
+                scoped.cookies.set_cookie(requests.cookies.create_cookie(**cookie))
+        else:
+            scoped.cookies.update(self.cookies)
+        explicit = None
+        for key in list(request.headers or {}):
+            if key.lower() == 'cookie':
+                explicit = request.headers.pop(key)
+        if explicit:
+            parsed = SimpleCookie(); parsed.load(explicit)
+            for name, cookie in parsed.items():
+                for old in list(scoped.cookies):
+                    if old.name == name: scoped.cookies.clear(old.domain, old.path, old.name)
+                scoped.cookies.set(name, cookie.value, domain=urlsplit(request.url).hostname, path='/')
+        prepared = requests.Session.prepare_request(scoped, request)
+        prepared.session_revision = int(state.get('revision', 0))
+        return prepared
+
+
+def prepare_async_headers(username, url, headers):
+    client = PersistedSession()
+    client.account_username = username
+    try:
+        prepared = client.prepare_request(requests.Request('GET', url, headers=dict(headers)))
+        return dict(prepared.headers), prepared.session_revision
+    finally:
+        client.close()
+
+
 _http_sessions = {}
 _session_lock = threading.Lock()
 
@@ -61,7 +115,14 @@ def _get_http_session(username=None):
     with _session_lock:
         session = _http_sessions.get(username)
         if session is None:
-            session = requests.Session()
+            session = PersistedSession()
+            session.account_username = username
+            from app_core.session_state import get_session
+            for cookie in get_session(username).get('http_cookies', []):
+                try:
+                    session.cookies.set_cookie(requests.cookies.create_cookie(**cookie))
+                except (TypeError, ValueError):
+                    logger.warning('Stored cookie could not be restored.')
             adapter = requests.adapters.HTTPAdapter(
                 pool_connections=15,
                 pool_maxsize=15,
@@ -184,6 +245,7 @@ def get_post_details(media_id, token_record):
         "like_count": 0,
         "like_count_verified": False,
         "comment_count": 0,
+        "comment_count_verified": False,
         "comments_disabled": False,
         "caption": "",
         "profile_pic_url": "",
@@ -226,6 +288,7 @@ def get_post_details(media_id, token_record):
                 res["like_count"] = item.get("like_count", 0)
                 res["like_count_verified"] = isinstance(item.get("like_count"), int)
                 res["comment_count"] = item.get("comment_count", 0)
+                res["comment_count_verified"] = type(item.get("comment_count")) is int
                 res["comments_disabled"] = item.get("comments_disabled", False)
                 caption = item.get("caption") or {}
                 res["caption"] = caption.get("text", "")
@@ -349,28 +412,25 @@ def build_auth_headers(token, user_agent, android_id, device_id, username=None):
     return headers
 
 def _update_session_from_response(username, response):
-    """
-    Response'dan session state'i gunceller.
-    Iki kaynagi kontrol eder:
-      1. HTTP response header'lari (normal API endpoint'leri)
-      2. Response body icindeki nested 'headers' JSON string'i
-         (Bloks endpoint'leri gercek degerleri buraya gomor)
-    """
     if not username or response is None:
         return
     try:
-        from app_core.session_state import update_session, update_session_from_body
-        # 1) HTTP response header'lari
-        update_session(username, response.headers, expected_token=getattr(getattr(response, "request", None), "headers", {}).get("authorization"))
-        # 2) Body icindeki gizli header'lar (JSON parse edilebiliyorsa)
+        from app_core.session_state import update_session, response_cookies, _search_headers_in_body
+        updates = {}
         try:
             body = response.json()
             if isinstance(body, dict):
-                update_session_from_body(username, body, expected_token=getattr(getattr(response, "request", None), "headers", {}).get("authorization"))
-        except Exception:
-            pass  # JSON degilse veya parse hatasi varsa sessizce gec
-    except Exception as e:
-        logger.warning("_update_session_from_response hatası: %s", e)
+                for values in _search_headers_in_body(body): updates.update(values)
+        except (ValueError, TypeError):
+            pass
+        updates.update({str(k).lower(): v for k,v in response.headers.items()})
+        update_session(username, updates,
+                       expected_token=getattr(getattr(response, 'request', None), 'headers', {}).get('authorization'),
+                       cookies=response_cookies(response),
+                       expected_revision=getattr(getattr(response, 'request', None), 'session_revision', None))
+    except Exception as error:
+        logger.warning('Session update failed: %s', type(error).__name__)
+
 
 def _get_username(token_record):
     """Token record'dan username'i çıkarır."""
@@ -404,6 +464,16 @@ def current_token(username, fallback):
     return get_current_token(username, fallback)
 
 
+def _valid_auth_probe(response):
+    try:
+        data = response.json()
+        if not isinstance(data, dict) or data.get('status') == 'fail' or data.get('errors') or data.get('error'):
+            return False
+        return isinstance(data.get('inbox'), dict) or bool(data.get('data'))
+    except (ValueError, TypeError):
+        return False
+
+
 def validate_token(token_record):
     username = _get_username(token_record)
     token = current_token(username, token_record.get("token", ""))
@@ -416,7 +486,7 @@ def validate_token(token_record):
     
     user_id = extract_user_id_from_token(token)
     if not user_id:
-        return True
+        return None
     
     # Birincil: GraphQL profile timeline (doğal görünür, inbox kadar sıklıkla kullanılmaz)
     try:
@@ -451,7 +521,7 @@ def validate_token(token_record):
         if response_has_invalid_session(response):
             logger.warning("Token reddedildi (graphql): %d", response.status_code)
             return False
-        if response.status_code == 200:
+        if response.status_code == 200 and _valid_auth_probe(response):
             logger.info("Token dogrulandi (graphql): %s", device_id[:8])
             return True
     except Exception as error:
@@ -469,13 +539,13 @@ def validate_token(token_record):
         if response_has_invalid_session(response):
             logger.warning("Token reddedildi (inbox fallback): %d", response.status_code)
             return False
-        if response.status_code == 200:
+        if response.status_code == 200 and _valid_auth_probe(response):
             logger.info("Token dogrulandi (inbox fallback): %s", device_id[:8])
             return True
     except Exception as error:
         logger.warning("Token dogrulama hatasi (inbox fallback): %s", error)
     
-    return True
+    return None
 
 
 def fetch_comment_usernames(media_id, token_record, min_id=None, progress_callback=None):
@@ -1213,6 +1283,7 @@ async def get_post_details_async(media_id, token_record, session: aiohttp.Client
         "like_count": 0,
         "like_count_verified": False,
         "comment_count": 0,
+        "comment_count_verified": False,
         "caption": "",
         "taken_at": 0,
         "profile_pic_url": "",
@@ -1240,14 +1311,16 @@ async def get_post_details_async(media_id, token_record, session: aiohttp.Client
     proxy_url = get_outbound_proxy()
     
     try:
+        url = f"https://i.instagram.com/api/v1/media/{media_id}/info/"
+        headers, session_revision = prepare_async_headers(username, url, headers)
         async with session.get(
-            f"https://i.instagram.com/api/v1/media/{media_id}/info/",
+            url,
             headers=headers,
             proxy=proxy_url,
             timeout=aiohttp.ClientTimeout(total=8)
         ) as response:
-            from app_core.session_state import update_session
-            update_session(username, response.headers, expected_token=headers.get("authorization"))
+            from app_core.session_state import update_session, response_cookies
+            update_session(username, response.headers, expected_token=headers.get("authorization"), cookies=response_cookies(response), expected_revision=session_revision)
             headers.update(build_auth_headers(token, user_agent, android_id, device_id, username=username))
             if response.status == 200:
                 data = await response.json()
@@ -1261,6 +1334,7 @@ async def get_post_details_async(media_id, token_record, session: aiohttp.Client
                     res["like_count"] = item.get("like_count", 0)
                     res["like_count_verified"] = isinstance(item.get("like_count"), int)
                     res["comment_count"] = item.get("comment_count", 0)
+                    res["comment_count_verified"] = type(item.get("comment_count")) is int
                     res["taken_at"] = item.get("taken_at", 0)
                     caption = item.get("caption") or {}
                     res["caption"] = caption.get("text", "")
@@ -1341,15 +1415,17 @@ async def fetch_comment_usernames_async(media_id, token_record, session: aiohttp
     while page_count < MAX_COMMENT_PAGES:
         page_count += 1
         try:
+            url = f"https://i.instagram.com/api/v1/media/{media_id}/stream_comments/"
+            headers, session_revision = prepare_async_headers(username, url, headers)
             async with session.get(
-                f"https://i.instagram.com/api/v1/media/{media_id}/stream_comments/",
+                url,
                 params=params,
                 headers=headers,
                 proxy=proxy_url,
                 timeout=aiohttp.ClientTimeout(total=8)
             ) as response:
-                from app_core.session_state import update_session
-                update_session(username, response.headers, expected_token=headers.get("authorization"))
+                from app_core.session_state import update_session, response_cookies
+                update_session(username, response.headers, expected_token=headers.get("authorization"), cookies=response_cookies(response), expected_revision=session_revision)
                 headers.update(build_auth_headers(token, user_agent, android_id, device_id, username=username))
                 if response.status in [401, 403]:
                     return {"ok": False, "status": response.status, "comments": list(usernames)}
@@ -1412,14 +1488,16 @@ async def fetch_liker_usernames_async(media_id, token_record, session: aiohttp.C
     proxy_url = get_outbound_proxy()
 
     try:
+        url = f"https://i.instagram.com/api/v1/media/{media_id}/likers/"
+        headers, session_revision = prepare_async_headers(username, url, headers)
         async with session.get(
-            f"https://i.instagram.com/api/v1/media/{media_id}/likers/",
+            url,
             headers=headers,
             proxy=proxy_url,
             timeout=aiohttp.ClientTimeout(total=8)
         ) as response:
-            from app_core.session_state import update_session
-            update_session(username, response.headers, expected_token=headers.get("authorization"))
+            from app_core.session_state import update_session, response_cookies
+            update_session(username, response.headers, expected_token=headers.get("authorization"), cookies=response_cookies(response), expected_revision=session_revision)
             headers.update(build_auth_headers(token, user_agent, android_id, device_id, username=username))
             if response.status == 200:
                 data = await response.json()

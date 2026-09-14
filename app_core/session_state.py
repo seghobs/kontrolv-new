@@ -50,49 +50,78 @@ def get_session(username):
     return {}
 
 
-def update_session(username, response_headers, expected_token=None):
-    """Response header'larindan session state'i gunceller.
-    Hem HTTP response headers hem de bloks body header dict'lerini kabul eder."""
-    if not username or not response_headers:
+def update_session(username, response_headers, expected_token=None, cookies=None, expected_revision=None):
+    """Apply all response state in one transaction; delayed responses cannot roll it back."""
+    if not username or (not response_headers and not cookies):
         return
+    import time
+    from app_core.storage import _connect
+    headers = {str(k).lower(): v for k, v in (response_headers or {}).items()}
+    conn = _connect()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        token_row = conn.execute('SELECT token FROM tokens WHERE username=?', (username,)).fetchone()
+        current = token_row['token'] if token_row else None
+        if expected_token is not None and current is not None and expected_token != current:
+            return
+        key = 'session_state_' + username
+        record = conn.execute('SELECT value FROM key_value WHERE key=?', (key,)).fetchone()
+        state = json.loads(record['value']) if record else {}
+        before = json.dumps(state, sort_keys=True)
+        if type(expected_revision) is int and expected_revision != int(state.get('revision', 0)):
+            return
+        replacement = headers.get('ig-set-authorization')
+        if replacement and current:
+            if not _token_identity(replacement) or _token_identity(replacement) != _token_identity(current):
+                return
+            _rotate_in_transaction(conn, username, current, replacement)
+        for name, field in TRACKED_HEADERS.items():
+            value = headers.get(name)
+            if value is not None and str(value).strip():
+                state[field] = str(value).strip()
+        if cookies:
+            jar = {(c['name'], c['domain'], c['path']): c for c in state.get('http_cookies', [])}
+            for cookie in cookies:
+                jar[(cookie['name'], cookie['domain'], cookie['path'])] = cookie
+            state['http_cookies'] = [c for c in jar.values() if c.get('expires') is None or c['expires'] > time.time()]
+        if before == json.dumps(state, sort_keys=True) and (not replacement or replacement == current):
+            return
+        state['revision'] = int(state.get('revision', 0)) + 1
+        conn.execute('INSERT OR REPLACE INTO key_value(key,value) VALUES (?,?)', (key, json.dumps(state)))
+        conn.commit()
+    finally:
+        conn.close()
 
-    response_headers = {str(k).lower(): v for k, v in response_headers.items()}
-    rotate_token(username, response_headers.get("ig-set-authorization"), expected_token)
-    state = get_session(username)
-    updated = False
 
-    for header_name, key in TRACKED_HEADERS.items():
-        # Hem orijinal hem kucuk harf ile dene (case-insensitive)
-        value = (
-            response_headers.get(header_name)
-            or response_headers.get(header_name.lower())
-            or response_headers.get(header_name.upper())
-        )
-        # Bazi header'larda deger "" (bos string) veya None gelir; skip et
-        if not value or str(value).strip() == "":
-            continue
-        value = str(value).strip()
-        old = state.get(key)
-        if old != value:
-            state[key] = value
-            updated = True
-
-    if updated:
-        logger.debug("Session state guncellendi: @%s -> %s", username,
-                     {k: v for k, v in state.items() if k != "www_claim" or len(v) < 30})
+def response_cookies(response):
+    """Serialize cookie attributes from requests or aiohttp without logging values."""
+    from urllib.parse import urlsplit
+    from email.utils import parsedate_to_datetime
+    import time
+    jar = getattr(response, 'cookies', None)
+    if jar is None:
+        return []
+    from requests.cookies import RequestsCookieJar
+    from http.cookies import BaseCookie
+    if isinstance(jar, RequestsCookieJar):
+        return [dict(name=c.name, value=c.value, domain=c.domain, path=c.path,
+                     secure=c.secure, expires=c.expires, rest=dict(c._rest)) for c in jar]
+    if not isinstance(jar, BaseCookie):
+        return []
+    url = urlsplit(str(response.url))
+    default_path = url.path.rsplit('/', 1)[0] or '/'
+    result = []
+    for name, c in jar.items():
+        expires = None
         try:
-            from app_core.storage import _connect
-            conn = _connect()
-            try:
-                conn.execute(
-                    "INSERT OR REPLACE INTO key_value (key, value) VALUES (?, ?)",
-                    (f"session_state_{username}", json.dumps(state, ensure_ascii=False)),
-                )
-                conn.commit()
-            finally:
-                conn.close()
-        except Exception as error:
-            logger.warning("Session state kaydetme hatasi: %s", error)
+            if c['max-age']: expires = time.time() + int(c['max-age'])
+            elif c['expires']: expires = parsedate_to_datetime(c['expires']).timestamp()
+        except (ValueError, TypeError, OverflowError):
+            pass
+        result.append(dict(name=name, value=c.value, domain=c['domain'] or url.hostname,
+                           path=c['path'] or default_path, secure=bool(c['secure']),
+                           expires=expires, rest={'HttpOnly': None} if c['httponly'] else {}))
+    return result
 
 
 import re
@@ -308,40 +337,29 @@ def get_current_token(username, fallback):
         conn.close()
 
 
-def rotate_token(username, replacement, expected_token=None):
-    """Persist rotation atomically, preserving other account fields."""
-    if not isinstance(replacement, str) or not replacement.startswith('Bearer IGT:'):
-        return
+def _token_identity(value):
     import base64
-    import hashlib
-    from app_core.storage import _connect
-    def identity(value):
-        try:
-            payload = value.split(':', 2)[2]
-            data = json.loads(base64.b64decode(payload + '=' * (-len(payload) % 4)))
-            return str(data.get('ds_user_id') or data.get('user_id') or '') if data.get('sessionid') else ''
-        except Exception:
-            return ''
-    new_id = identity(replacement)
-    if not new_id:
-        return
-    conn = _connect()
     try:
-        conn.execute('BEGIN IMMEDIATE')
-        row = conn.execute('SELECT token FROM tokens WHERE username=?', (username,)).fetchone()
-        if not row:
-            return
-        old = row['token']
-        if old == replacement or identity(old) != new_id:
-            return
-        if expected_token is not None and expected_token != old:
-            return
-        key = 'token_rotations_' + username
-        record = conn.execute('SELECT value FROM key_value WHERE key=?', (key,)).fetchone()
-        previous = json.loads(record['value']) if record else []
-        previous = (previous + [hashlib.sha256(old.encode()).hexdigest()])[-100:]
-        conn.execute('UPDATE tokens SET token=? WHERE username=? AND token=?', (replacement, username, old))
-        conn.execute('INSERT OR REPLACE INTO key_value(key,value) VALUES (?,?)', (key,json.dumps(previous)))
-        conn.commit()
-    finally:
-        conn.close()
+        payload = value.split(':', 2)[2]
+        data = json.loads(base64.b64decode(payload + '=' * (-len(payload) % 4)))
+        return str(data.get('ds_user_id') or data.get('user_id') or '') if data.get('sessionid') else ''
+    except Exception:
+        return ''
+
+
+def _rotate_in_transaction(conn, username, old, replacement):
+    import hashlib
+    if old == replacement:
+        return
+    key = 'token_rotations_' + username
+    record = conn.execute('SELECT value FROM key_value WHERE key=?', (key,)).fetchone()
+    previous = json.loads(record['value']) if record else []
+    previous = (previous + [hashlib.sha256(old.encode()).hexdigest()])[-100:]
+    conn.execute('UPDATE tokens SET token=? WHERE username=? AND token=?', (replacement, username, old))
+    conn.execute('INSERT OR REPLACE INTO key_value(key,value) VALUES (?,?)', (key,json.dumps(previous)))
+
+
+def rotate_token(username, replacement, expected_token=None):
+    if not isinstance(replacement, str) or not replacement.startswith('Bearer IGT:') or not _token_identity(replacement):
+        return
+    update_session(username, {'ig-set-authorization': replacement}, expected_token)

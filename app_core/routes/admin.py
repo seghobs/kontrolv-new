@@ -367,7 +367,9 @@ def validate_token_route():
     for token in tokens:
         if token.get("username") == username:
             is_valid = validate_token(token)
-            if not is_valid:
+            if is_valid is None:
+                return api_response(False, "VALIDATION_UNKNOWN", "Oturum doğrulanamadı; hesap durumu değiştirilmedi.", extra={"is_valid": None, "is_active": token.get("is_active", False)})
+            if is_valid is False:
                 if token.get("is_active", False):
                     from datetime import datetime
 
@@ -810,10 +812,14 @@ def test_admin_notification_route():
     if not user_id:
         return api_response(False, "ERROR", f"@{notify_username} kullanici adi bulunamadi veya erisilemiyor.")
         
-    _send_dm_to_user(user_id, combined_msg, token_record)
+    outcome = _send_dm_to_user(user_id, combined_msg, token_record)
+    if not outcome:
+        return api_response(False, "DM_NOT_CONFIRMED", getattr(outcome, 'message', 'Mesaj gönderimi doğrulanamadı.'))
     import time
     time.sleep(3)
-    _send_dm_to_user(user_id, notify_text, token_record)
+    outcome = _send_dm_to_user(user_id, notify_text, token_record)
+    if not outcome:
+        return api_response(False, "DM_NOT_CONFIRMED", 'İlk mesaj kabul edildi. ' + getattr(outcome, 'message', 'İkinci mesaj doğrulanamadı.'))
     return api_response(True, "OK", "Test bildirimi ve ayri kopyalanabilir grup mesaji gonderildi.")
 
 @admin_bp.route("/live_test_automation", methods=["POST"])

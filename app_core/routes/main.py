@@ -9,7 +9,7 @@ from flask import Blueprint, jsonify, render_template, request, session, redirec
 from donustur import donustur
 from log_in import giris_yap, LoginError
 
-from app_core.instagram_api import get_post_sender, get_media_taken_at, get_post_details
+from app_core.instagram_api import get_post_sender, get_media_taken_at, get_post_details, comments_cover_total
 from app_core.storage import load_exemptions, save_exemptions, load_global_exemptions, add_global_exemption, add_audit_log, _connect
 from app_core.validators import normalize_username
 from app_core.token_service import (
@@ -314,7 +314,7 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
                         norm_uname = normalize_username(uname)
                         commenters_normalized.add(norm_uname)
                 
-                if not check_likes and all_result.get('incomplete'):
+                if not check_likes and (all_result.get('incomplete') or ((grup_uye_kullanicilar - all_exempted_for_link - commenters_normalized) and not comments_cover_total(post_details, comments_list))):
                     tracker['done'] += 1
                     if progress_callback:
                         progress_callback(tracker['done'], tracker['total'], 'Paylaşım doğrulanamadı; diğer kontroller sürüyor.')
@@ -352,6 +352,7 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
         conn = aiohttp.TCPConnector(limit=15)
         timeout = aiohttp.ClientTimeout(total=12)
         async with aiohttp.ClientSession(
+            cookie_jar=aiohttp.DummyCookieJar(),
             connector=conn, 
             timeout=timeout,
             headers={"Accept-Encoding": "gzip, deflate"},
@@ -407,7 +408,7 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
                 all_result = fetch_comments_with_failover(media_id, token_record=working_token)
                 comments_list = all_result if isinstance(all_result, list) else all_result.get("comments", [])
                 commenters_normalized = {normalize_username(uname) for uname, _ in comments_list}
-            if not check_likes and isinstance(all_result, dict) and all_result.get('incomplete'):
+            if not check_likes and ((isinstance(all_result, dict) and all_result.get('incomplete')) or ((grup_uye_kullanicilar - all_exempted_for_link - commenters_normalized) and not comments_cover_total(post_details, comments_list))):
                 fetched_results.append(incomplete_comment_post(link_single, post_details, post_sender, comments_list))
                 continue
             try:

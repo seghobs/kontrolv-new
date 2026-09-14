@@ -9,6 +9,24 @@ from app_core.validators import normalize_username
 
 member_bp=Blueprint('member_analysis',__name__)
 
+
+def member_comments(response, username):
+    records = response.get('comments')
+    if not isinstance(records, (list, tuple)):
+        return [], 0, False
+    matches = []
+    count = 0
+    complete = not response.get('incomplete')
+    for record in records:
+        if not isinstance(record, (list, tuple)) or len(record) != 2 or not isinstance(record[0], str) or not record[0].strip():
+            complete = False
+            continue
+        user, text = record
+        count += 1
+        if normalize_username(user) == username:
+            matches.append(text if isinstance(text, str) else '')
+    return matches, count, complete
+
 @member_bp.post('/api/member_analysis/<source_id>')
 def start(source_id):
     source=jobs.get_job(source_id)
@@ -45,6 +63,33 @@ def start(source_id):
                 (identifier,'member',json.dumps(payload),now,now,now,source_id,key,'Üye analizi hazırlanıyor.'))
     return jsonify(success=True,job_id=identifier,result_url='/member-analysis/'+identifier)
 
+@member_bp.post('/api/member_analysis/<identifier>/refresh')
+@member_bp.post('/api/member_analysis/<identifier>/retry-unknown')
+def retry_unknown(identifier):
+    import json, time, uuid
+    source = jobs.get_job(identifier)
+    if not source or source['kind'] != 'member' or source['state'] != 'completed': abort(404)
+    result = source['result'] or {}
+    reports = [result.get('comment_report', {}), result.get('like_report', {})] if result.get('dual_check') else [result]
+    refresh = request.path.endswith('/refresh')
+    if not refresh and result.get('analysis_version', 0) < 2:
+        return jsonify(error='Önceki sürüm raporunu önce yeniden doğrulayın.'), 400
+    if not refresh and not any(row.get('state') == 'unknown' for report in reports for row in report.get('rows', [])):
+        return jsonify(error='Tekrar kontrol edilecek belirsiz sonuç yok.'), 400
+    payload = {k:v for k,v in source['payload'].items() if k not in ('_job_id', 'retry_source')}
+    if not refresh: payload['retry_source'] = identifier
+    with jobs.transaction() as conn:
+        key = ('member-refresh:' if refresh else 'member-unknown:') + identifier
+        row = conn.execute("SELECT id FROM jobs WHERE dedupe_key=? AND state IN ('queued','running','cancelling')", (key,)).fetchone()
+        if row: new_id = row['id']
+        else:
+            conn.execute('UPDATE jobs SET dedupe_key=NULL WHERE dedupe_key=?', (key,))
+            new_id = uuid.uuid4().hex; now = time.time()
+            conn.execute('INSERT INTO jobs(id,kind,payload,created,updated,available,parent_id,dedupe_key,message) VALUES (?,?,?,?,?,?,?,?,?)',
+                         (new_id,'member',json.dumps(payload),now,now,now,identifier,key,'Belirsiz sonuçlar tekrar kontrol ediliyor.'))
+    return jsonify(success=True, job_id=new_id, result_url='/member-analysis/'+new_id)
+
+
 @member_bp.get('/member-analysis/<identifier>')
 def page(identifier):
     job=jobs.get_job(identifier)
@@ -59,27 +104,42 @@ def run(payload, progress):
     progress(0,1,'Seçilen günün tüm paylaşımları alınıyor…')
     token=get_working_active_token()
     if not token:raise ValueError('Geçerli bir Instagram oturumu bulunamadı.')
+    prior_reports = {}
+    if payload.get('retry_source'):
+        prior = jobs.get_job(payload['retry_source'])
+        if not prior or prior['kind'] != 'member' or prior['state'] != 'completed':
+            raise ValueError('Önceki analiz bulunamadı.')
+        result = prior['result'] or {}
+        reports = [result.get('comment_report', {}), result.get('like_report', {})] if result.get('dual_check') else [result]
+        prior_reports = {bool(r.get('check_likes')): {row['url']: row for row in r.get('rows', [])} for r in reports}
     posts=[];seen=set()
     start = datetime.strptime(payload['date'],'%Y-%m-%d')
     end = datetime.strptime(payload.get('end_date') or payload['date'],'%Y-%m-%d')
     if not 0 <= (end-start).days <= 30: raise ValueError('Geçersiz tarih aralığı.')
-    for offset in range((end-start).days+1):
-        date = start + timedelta(days=offset)
-        media=fetch_group_media_with_failover(payload['thread_id'],date,token_record=token,complete=True)
-        if not media.get('ok'):raise ValueError('Günün tüm paylaşımları alınamadı; analiz tamamlanmadı.')
-        for post in media.get('posts',[]):
-            code=donustur(post.get('url',''))
-            key=str(code) if code else post.get('url','')
-            if key in seen:continue
-            seen.add(key);posts.append({**post,'shared_at':date.isoformat()})
-    username=payload['username'];likes=payload['check_likes'];done=0
+    if prior_reports:
+        originals = next(iter(prior_reports.values()))
+        posts = [{'url':r['url'], 'username':r.get('sender', '')} for r in originals.values()]
+    else:
+        for offset in range((end-start).days+1):
+            date = start + timedelta(days=offset)
+            media=fetch_group_media_with_failover(payload['thread_id'],date,token_record=token,complete=True)
+            if not media.get('ok'):raise ValueError('Günün tüm paylaşımları alınamadı; analiz tamamlanmadı.')
+            for post in media.get('posts',[]):
+                code=donustur(post.get('url',''))
+                key=str(code) if code else post.get('url','')
+                if key in seen:continue
+                seen.add(key);posts.append({**post,'shared_at':date.isoformat()})
+    username=normalize_username(payload['username']);likes=payload['check_likes'];done=0
     from app_core.followup import read, write
-    checkpoint_key='member-checkpoint:'+str(payload.get('_job_id',''))
+    checkpoint_key='member-checkpoint-v2:'+str(payload.get('_job_id',''))
     saved=read(checkpoint_key,{}) if payload.get('_job_id') else {}
     async def scan():
         sem=asyncio.Semaphore(4)
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(cookie_jar=aiohttp.DummyCookieJar()) as session:
             async def check(post, likes):
+                previous = prior_reports.get(likes, {}).get(post['url'])
+                if previous and previous.get('state') != 'unknown':
+                    return {**previous, 'reused': True}
                 row={'url':post['url'],'sender':post.get('username',''),'state':'unknown','comments':[], 'checked_at':__import__('time').time(), 'reason':'Veriler tam doğrulanamadı.'}
                 if payload.get('skip_owner') and normalize_username(post.get('username','')) == username:
                     row.update(state='excluded', reason='Kendi paylaşımı')
@@ -94,12 +154,18 @@ def run(payload, progress):
                         elif response.get('ok'):
                             details=await get_post_details_async(mid,token,session)
                             count=(details or {}).get('like_count')
-                            if details.get('like_count_verified') and isinstance(count,int) and count>=0 and len(users)>=count: row['state']='missing'
+                            if (details or {}).get('like_count_verified') and isinstance(count,int) and count>=0 and len(users)>=count: row['state']='missing'
                     else:
                         response=await fetch_comment_usernames_async(mid,token,session) or {}
-                        row['comments']=[text for user,text in response.get('comments',[]) if normalize_username(user)==username]
+                        row['comments'], obtained_count, complete = member_comments(response, username)
                         if row['comments']:row['state']='present'
-                        elif response.get('ok') and not response.get('incomplete'):row['state']='missing'
+                        elif response.get('ok') and complete:
+                            details = await get_post_details_async(mid, token, session) or {}
+                            count = details.get('comment_count')
+                            if details.get('comment_count_verified') and type(count) is int and count >= 0 and obtained_count >= count:
+                                row['state'] = 'missing'
+                            else:
+                                row['reason'] = 'Yorum listesi toplam yorum sayısıyla doğrulanamadı; üye eksik sayılmadı.'
                 except Exception:
                     row['state']='unknown'
                 if row['state'] != 'unknown': row['reason'] = 'Güncel Instagram verisiyle kontrol edildi.'
@@ -122,7 +188,7 @@ def run(payload, progress):
             return await asyncio.gather(*(one(post) for post in posts))
     rows=asyncio.run(scan())
     def report(items, mode):
-        return {**payload,'check_likes':mode,'rows':items,'total':len(items),'counts':{s:sum(r['state']==s for r in items) for s in ('present','missing','unknown','excluded')}}
+        return {**payload,'analysis_version':2,'check_likes':mode,'rows':items,'total':len(items),'counts':{s:sum(r['state']==s for r in items) for s in ('present','missing','unknown','excluded')}}
     if payload.get('dual_check'):
-        return {**payload,'total':len(rows),'comment_report':report([r[0] for r in rows],False),'like_report':report([r[1] for r in rows],True)}
+        return {**payload,'analysis_version':2,'total':len(rows),'comment_report':report([r[0] for r in rows],False),'like_report':report([r[1] for r in rows],True)}
     return report(rows,likes)

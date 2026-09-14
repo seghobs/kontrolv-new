@@ -54,8 +54,8 @@ def execute_claimed(job):
             from app_core.followup import read, write
             if job['parent_id']:
                 prior=jobs.get_job(job['parent_id'])
-                if prior and prior['state']=='failed' and not read('member-checkpoint:'+job_id):
-                    write('member-checkpoint:'+job_id,read('member-checkpoint:'+prior['id'],{}))
+                if prior and prior['state']=='failed' and not read('member-checkpoint-v2:'+job_id):
+                    write('member-checkpoint-v2:'+job_id,read('member-checkpoint-v2:'+prior['id'],{}))
             payload['_job_id'] = job_id
             result = run(payload, progress)
         elif job['kind'] == 'preset':

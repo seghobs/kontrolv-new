@@ -40,7 +40,7 @@ class AuditRegressions(unittest.TestCase):
 
     def test_quick_update_retries_failed_posts(self):
         previous={'links':[{'post_link':'https://www.instagram.com/p/ABC','error':'API error','eksikler':[]}]}
-        result,calls,_=self.control(previous=previous)
+        result,calls,_=self.control(previous=previous,details={'comment_count':1,'comment_count_verified':True})
         self.assertEqual(calls,1)
         self.assertEqual(result['links'][0]['eksikler'],['bob'])
 

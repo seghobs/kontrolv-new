@@ -47,7 +47,7 @@ class NullCommentTests(unittest.TestCase):
                 return {'ok':False,'incomplete':True,'comments':[('alice','')]}
             return {'ok':True,'comments':[('alice','hello')]}
         with patch.object(main,'get_working_active_token',return_value={'token':'test'}), \
-             patch.object(api,'get_post_details_async',new=AsyncMock(return_value={})), \
+             patch.object(api,'get_post_details_async',new=AsyncMock(return_value={'comment_count':1,'comment_count_verified':True})), \
              patch.object(api,'fetch_comment_usernames_async',side_effect=comments), \
              patch('asyncio.sleep',new=AsyncMock()):
             result=main.run_manual_control('https://www.instagram.com/p/ABC\nhttps://www.instagram.com/p/DEF','alice bob','',[],False)
@@ -59,7 +59,7 @@ class NullCommentTests(unittest.TestCase):
 
     def test_null_text_establishes_presence_without_false_format_violation(self):
         with patch.object(main,'get_working_active_token',return_value={'token':'test'}), \
-             patch.object(api,'get_post_details_async',new=AsyncMock(return_value={})), \
+             patch.object(api,'get_post_details_async',new=AsyncMock(return_value={'comment_count':1,'comment_count_verified':True})), \
              patch.object(api,'fetch_comment_usernames_async',new=AsyncMock(return_value={'ok':True,'comments':[('alice','')]})), \
              patch('asyncio.sleep',new=AsyncMock()):
             result=main.run_manual_control('https://www.instagram.com/p/ABC','alice bob','',[],False)

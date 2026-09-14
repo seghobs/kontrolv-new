@@ -56,7 +56,7 @@ class TokenLifecycleTests(unittest.TestCase):
     def test_validation_does_not_reject_plain_403(self):
         response=Mock(status_code=403, json=Mock(return_value={'message':'Forbidden'}))
         with patch.object(api,'_get_http_session',return_value=Mock(post=Mock(return_value=response),get=Mock(return_value=response))), patch.object(api,'_update_session_from_response'):
-            self.assertTrue(api.validate_token(self.record))
+            self.assertIsNone(api.validate_token(self.record))
             response.json.return_value={'message':'login_required'}
             self.assertFalse(api.validate_token(self.record))
 

@@ -5,6 +5,7 @@ import os
 import random
 import time
 import uuid
+from app_core.delivery import classify_dm, DeliveryResult
 
 import pytz
 import requests
@@ -98,10 +99,12 @@ def _send_dm_to_user(recipient_user_id, text, token_record):
         )
         _update_session_from_response(token_record.get("username", ""), resp)
         logger.info("Bildirim DM sonucu user=%s status=%s", recipient_user_id, resp.status_code)
-        return resp.status_code == 200
+        result = classify_dm(resp)
+        logger.info("DM outcome code=%s http=%s", result.code, resp.status_code)
+        return result
     except Exception as e:
-        logger.error("Bildirim DM hatasi: %s", e)
-        return False
+        logger.warning("DM transport failure type=%s", type(e).__name__)
+        return DeliveryResult("unknown", "Bağlantı kesildi; mesaj sonucu belirsiz. Yeniden göndermeden önce konuşmayı kontrol edin.", "transport_error")
 
 
 def _send_dm(thread_id, text, token_record):
@@ -128,10 +131,12 @@ def _send_dm(thread_id, text, token_record):
         )
         _update_session_from_response(token_record.get("username", ""), resp)
         logger.info("DM sonucu thread=%s status=%s", thread_id, resp.status_code)
-        return resp.status_code == 200
+        result = classify_dm(resp)
+        logger.info("DM outcome code=%s http=%s", result.code, resp.status_code)
+        return result
     except Exception as e:
-        logger.error("DM gonderme hatasi: %s", e)
-        return False
+        logger.warning("DM transport failure type=%s", type(e).__name__)
+        return DeliveryResult("unknown", "Bağlantı kesildi; mesaj sonucu belirsiz. Yeniden göndermeden önce konuşmayı kontrol edin.", "transport_error")
 
 
 def _fetch_comment_usernames(media_id, token_record):
@@ -177,6 +182,9 @@ def _fetch_comment_details(media_id, token_record):
     if not result.get('ok'):
         raise RuntimeError('Yorumlar eksiksiz alınamadı.')
     comments = result.get('comments', [])
+    from app_core.instagram_api import comments_cover_total
+    if not comments_cover_total(details, comments):
+        raise RuntimeError('Yorum listesi tam doğrulanamadı; eksik bildirimi gönderilmedi.')
     return {_normalize(u) for u, _ in comments}, details.get('comment_count',len(comments)), True, comments
 
 
@@ -184,8 +192,9 @@ def run_automation_for_thread(thread_id, test_mode=False, target_date=None, befo
     def deliver(sender, *args):
         if before_send:
             before_send()
-        if not sender(*args):
-            raise RuntimeError("Mesajın gönderildiği doğrulanamadı. Yeniden göndermeden önce kontrol edin.")
+        outcome = sender(*args)
+        if not outcome:
+            raise RuntimeError(getattr(outcome, 'message', "Mesajın gönderildiği doğrulanamadı. Yeniden göndermeden önce kontrol edin."))
 
     logger.info("Otomasyon baslatildi: %s (test_mode=%s)", thread_id, test_mode)
 
