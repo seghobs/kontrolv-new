@@ -16,7 +16,7 @@
 .report-page .result-top-actions button[onclick="triggerRecheck(true)"] { background: linear-gradient(125deg,#c4956a,#a97b53) !important; color: #1b120b !important; border-color: #c4956a !important; }
 .report-page .result-top-actions .result-action-btn:hover { transform: none !important; background: #271e16 !important; color: #ead4bd !important; }
 .report-page .result-top-actions .result-action-btn:disabled { opacity: .5; cursor: wait; }
-.report-page .result-top-actions a { margin-right: auto; }
+.report-page .result-top-actions a { margin-right: 0; }
 .report-page .sortable-main-card { background: linear-gradient(150deg,#1b1510,#130f0c); border: 1px solid #c4956a2b; border-radius: 18px; box-shadow: 0 8px 24px #0002; animation: none; overflow: hidden; }
 .report-page .sortable-main-card:hover { transform: none; border-color: #c4956a45; }
 .report-page .eksikler-section-header,.report-page .completed-section-header,.report-page .detayli-rapor-header { background: linear-gradient(110deg,#2d2116a6,#211a1240) !important; padding: 18px 20px !important; border-bottom: 1px solid #c4956a20; }
