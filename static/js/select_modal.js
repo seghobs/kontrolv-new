@@ -3,10 +3,12 @@
     window.coffeeSelectInstalled = true;
     const controls = new Map();
     let active = null, returnFocus = null;
-    const dialog = document.createElement('dialog');
-    dialog.className = 'coffee-select-dialog';
-    dialog.setAttribute('aria-labelledby', 'coffee-select-title');
-    dialog.innerHTML = '<div class="coffee-select-heading"><h2 id="coffee-select-title">Seçim yap</h2><button type="button" class="coffee-select-close" aria-label="Seçim penceresini kapat">×</button></div><input class="coffee-select-search" type="search" placeholder="Seçenek ara…" aria-label="Seçeneklerde ara" autocomplete="off"><div class="coffee-select-list" role="group" aria-label="Seçenekler"></div><p class="coffee-select-empty" hidden>Aramana uygun seçenek bulunamadı.</p><div class="coffee-select-footer" hidden><button type="button">Seçimi tamamla</button></div>';
+    const dialog = document.createElement('div');
+    dialog.className = 'dropdown-menu coffee-select-dialog';
+    dialog.setAttribute('popover','manual');
+    dialog.setAttribute('role','group');
+    dialog.setAttribute('aria-label', 'Seçenekler');
+    dialog.innerHTML = '<input class="dropdown-search coffee-select-search" type="search" placeholder="Ara..." aria-label="Seçeneklerde ara" autocomplete="off"><div class="dropdown-options coffee-select-list" role="group" aria-label="Seçenekler"></div><p class="coffee-select-empty" hidden>Aramana uygun seçenek bulunamadı.</p><div class="coffee-select-footer" hidden><button type="button">Seçimi tamamla</button></div>';
     document.body.append(dialog);
     const search = dialog.querySelector('input'), list = dialog.querySelector('.coffee-select-list');
     function label(select) {
@@ -30,7 +32,21 @@
         button.setAttribute('aria-label', label(select) + ': ' + (chosen.join(', ') || 'Seçim yap'));
         button.title = chosen.join(', ');
     }
-    function close() { if (dialog.open) dialog.close(); }
+    function close() {
+        if (!active) return;
+        dialog.hidePopover();dialog.classList.remove('show');returnFocus?.classList.remove('active');
+        returnFocus?.setAttribute('aria-expanded','false');active=null;
+    }
+    function position() {
+        if (!active) return;
+        const r=returnFocus.getBoundingClientRect();
+        dialog.style.width=Math.min(r.width,innerWidth-16)+'px';
+        dialog.style.left=Math.max(8,Math.min(r.left,innerWidth-dialog.offsetWidth-8))+'px';
+        const below=innerHeight-r.bottom-16, above=r.top-16;
+        const height=Math.min(320,Math.max(below,above));
+        dialog.style.maxHeight=height+'px';
+        dialog.style.top=(below>=Math.min(320,dialog.scrollHeight)||below>=above?r.bottom+8:Math.max(8,r.top-dialog.offsetHeight-8))+'px';
+    }
     function draw() {
         if (!active) return;
         const query = search.value.trim().toLocaleLowerCase('tr');
@@ -43,13 +59,12 @@
                 const heading = document.createElement('p');heading.className = 'coffee-select-group';heading.textContent = group.label;list.append(heading);
             }
             lastGroup = group;
-            const row = document.createElement('button');row.type = 'button';row.className = 'coffee-select-option';
+            const row = document.createElement('button');row.type = 'button';row.className = 'dropdown-option coffee-select-option';row.classList.toggle('selected',option.selected);
             row.disabled = active.disabled || option.disabled || !!group?.disabled;
             row.setAttribute('aria-pressed', String(option.selected));
-            const badge = document.createElement('span');badge.className = 'coffee-select-badge';badge.setAttribute('aria-hidden','true');badge.textContent = [...option.textContent.trim()][0] || '•';
             const text = document.createElement('span');text.className = 'coffee-select-option-label';text.textContent = option.textContent;
             const check = document.createElement('span');check.className = 'coffee-select-check';check.setAttribute('aria-hidden','true');check.textContent = option.selected ? '✓' : '';
-            row.append(badge,text,check);row.dataset.index = index;
+            row.append(text,check);row.dataset.index = index;
             row.addEventListener('click', () => {
                 const select = active;
                 if (!select || select.disabled || option.disabled || group?.disabled) return;
@@ -58,7 +73,7 @@
                 select.dispatchEvent(new Event('input', {bubbles:true}));
                 select.dispatchEvent(new Event('change', {bubbles:true}));
                 sync(select);
-                if (!select.multiple) close();
+                if (!select.multiple) {close();returnFocus?.focus();}
                 else {draw();list.querySelector('[data-index="'+index+'"]')?.focus();}
             });
             list.append(row);count++;
@@ -68,18 +83,18 @@
     function open(select) {
         if (select.disabled || !select.isConnected) return;
         active = select;returnFocus = controls.get(select);
-        dialog.querySelector('h2').textContent = label(select);
+        dialog.setAttribute('aria-label',label(select));
         search.value = '';
         dialog.querySelector('.coffee-select-footer').hidden = !select.multiple;
-        draw();returnFocus.setAttribute('aria-expanded','true');dialog.showModal();search.focus();
+        draw();returnFocus.setAttribute('aria-expanded','true');returnFocus.classList.add('active');dialog.showPopover();dialog.classList.add('show');position();search.focus();
     }
-    dialog.querySelector('.coffee-select-close').onclick = close;
-    dialog.querySelector('.coffee-select-footer button').onclick = close;
-    dialog.addEventListener('click', event => {if (event.target === dialog) {const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)close();}});
-    dialog.addEventListener('close', () => {returnFocus?.setAttribute('aria-expanded','false');returnFocus?.focus();active=null;});
+    dialog.querySelector('.coffee-select-footer button').onclick = () => {close();returnFocus?.focus();};
+    document.addEventListener('pointerdown',event=>{if(active&&!dialog.contains(event.target)&&!returnFocus.contains(event.target))close();});
+    window.addEventListener('resize',position);
+    document.addEventListener('scroll',event=>{if(active&&!dialog.contains(event.target))position();},true);
     search.addEventListener('input', draw);
     dialog.addEventListener('keydown', event => {
-        if (event.key === 'Escape') {event.preventDefault();close();return;}
+        if (event.key === 'Escape') {event.preventDefault();close();returnFocus?.focus();return;}
         if (!['ArrowDown','ArrowUp','Home','End'].includes(event.key) || (event.target === search && event.key !== 'ArrowDown')) return;
         const rows = [...list.querySelectorAll('button:not(:disabled)')];if (!rows.length) return;
         event.preventDefault();const index = rows.indexOf(document.activeElement);
@@ -89,13 +104,13 @@
     function enhance(select) {
         // Existing group/post pickers already have custom interfaces.
         if (controls.has(select) || select.matches('.hidden-select,[hidden],[data-native-select]') || getComputedStyle(select).display==='none') return;
-        const button = document.createElement('button');button.type='button';button.className='coffee-select-trigger';
-        const text=document.createElement('span'),arrow=document.createElement('b');arrow.textContent='⌄';arrow.setAttribute('aria-hidden','true');button.append(text,arrow);
-        button.setAttribute('aria-haspopup','dialog');button.setAttribute('aria-expanded','false');
+        const button = document.createElement('button');button.type='button';button.className='dropdown-trigger coffee-select-trigger';
+        const text=document.createElement('span');text.className='dropdown-text';const arrow=document.createElement('b');arrow.textContent='⌄';arrow.setAttribute('aria-hidden','true');button.append(text,arrow);
+        button.setAttribute('aria-haspopup','true');button.setAttribute('aria-expanded','false');
         controls.set(select,button);select.after(button);select.classList.add('coffee-select-native');select.tabIndex=-1;select.setAttribute('aria-hidden','true');
-        button.onclick=()=>open(select);
+        button.onclick=()=>active===select?close():open(select);
         select.addEventListener('change',()=>{sync(select);if(active===select)draw();});
-        select.addEventListener('invalid',event=>{event.preventDefault();button.setAttribute('aria-invalid','true');if(!dialog.open)open(select);});
+        select.addEventListener('invalid',event=>{event.preventDefault();button.setAttribute('aria-invalid','true');if(!active)open(select);});
         select.addEventListener('change',()=>button.removeAttribute('aria-invalid'));
         select.addEventListener('focus',()=>button.focus());
         for (const key of ['value','selectedIndex']) {

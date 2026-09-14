@@ -12,6 +12,10 @@ with sync_playwright() as p:
     page.locator('.coffee-select-search').fill('does-not-exist')
     assert page.locator('.coffee-select-empty').is_visible()
     page.locator('.coffee-select-search').fill('')
+    menu=page.locator('.coffee-select-dialog');box=menu.bounding_box();anchor=control.locator('xpath=following-sibling::button[1]').bounding_box()
+    assert abs(box['x']-anchor['x'])<2 and abs(box['width']-anchor['width'])<2
+    assert abs(box['y']-(anchor['y']+anchor['height']+8))<2
+    assert page.locator('dialog.coffee-select-dialog').count()==0
     page.screenshot(path='scratch/select-modal-desktop.png')
     page.keyboard.press('ArrowDown');page.keyboard.press('Enter')
     assert not page.locator('.coffee-select-dialog').is_visible()
