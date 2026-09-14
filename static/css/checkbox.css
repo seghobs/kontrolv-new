@@ -1,0 +1,25 @@
+/* One checkbox style for static fields, dialogs and dynamically added controls. */
+body input[type="checkbox"]{
+ -webkit-appearance:none!important;appearance:none!important;box-sizing:border-box!important;
+ display:inline-block!important;position:relative!important;opacity:1!important;visibility:visible!important;
+ width:20px!important;height:20px!important;min-width:20px!important;min-height:20px!important;max-width:20px!important;flex:0 0 20px!important;
+ padding:0!important;margin:0 8px 0 0!important;vertical-align:middle!important;
+ border:1px solid #95704d!important;border-radius:6px!important;
+ background:#17110c!important;background-repeat:no-repeat!important;background-position:center!important;background-size:14px 14px!important;
+ box-shadow:inset 0 1px 3px #0003!important;cursor:pointer;outline:none;transition:background-color .15s,border-color .15s,box-shadow .15s;
+}
+body input[type="checkbox"]:checked{
+ background-color:#bd9066!important;border-color:#d0a77e!important;
+ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m3 8 3 3 7-7' fill='none' stroke='%231d140d' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")!important;
+ box-shadow:0 2px 7px #c4956a14,inset 0 1px 0 #ffffff18!important;
+}
+body input[type="checkbox"]:indeterminate{background-color:#bd9066!important;border-color:#d0a77e!important;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8h8' stroke='%231d140d' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E")!important}
+body input[type="checkbox"]:hover:not(:disabled){border-color:#dfb58c!important;box-shadow:0 0 0 3px #c4956a12!important}
+body input[type="checkbox"]:focus-visible{outline:2px solid #c4956a!important;outline-offset:3px!important}
+body input[type="checkbox"]:disabled{opacity:.4!important;cursor:not-allowed}
+body .toggle-switch{display:inline-flex!important;align-items:center;justify-content:center;width:28px!important;height:28px!important;flex:0 0 28px;transform:none!important}
+body .toggle-switch input[type="checkbox"]{margin:0!important}
+body .toggle-switch .slider{display:none!important}
+.followup-page [data-batch]>.followup-grid:first-child>label:has(input[type="checkbox"]:checked){border-color:#c4956a70;background:#c4956a0d}
+@media(prefers-reduced-motion:reduce){body input[type="checkbox"]{transition:none}}
+@media(forced-colors:active){body input[type="checkbox"]{-webkit-appearance:auto!important;appearance:auto!important;background-image:none!important;forced-color-adjust:auto}}
