@@ -16,5 +16,8 @@ with sync_playwright() as p:
  page.locator('.member-analyze-button').click();page.locator('[name=skip_owner]').uncheck();page.locator('[type=submit]').click()
  page.wait_for_function('window.sent!==undefined');assert page.evaluate('window.sent')=={'username':'zulg arbat','date':'2026-09-14','end_date':'2026-09-15','skip_owner':False}
  assert page.locator('.member-error').inner_text()=='Test hata mesajı';assert page.locator('[type=submit]').is_enabled()
+ page.evaluate("() => {window.fetch=async()=>({ok:false,json:async()=>{throw new SyntaxError('HTML response')}})}")
+ page.locator('[type=submit]').click();page.wait_for_function("document.querySelector('.member-error').textContent.includes('geçerli yanıt')")
+ assert page.locator('[type=submit]').is_enabled()
  page.keyboard.press('Escape');assert not page.locator('dialog').is_visible()
  b.close();print('Daily modal: desktop/mobile alignment, cancel, Escape, request payload and error recovery passed.')

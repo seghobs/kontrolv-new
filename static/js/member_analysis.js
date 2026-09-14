@@ -72,8 +72,9 @@
                 method:'POST',headers:{'Content-Type':'application/json'},
                 body:JSON.stringify({username, date:dialog.querySelector('[name=date]').value,end_date:dialog.querySelector('[name=end_date]').value,skip_owner:dialog.querySelector('[name=skip_owner]').checked})
             });
-            const data = await response.json();
-            if (!response.ok || !data.success) throw new Error(data.error || 'Analiz başlatılamadı.');
+            let data;
+            try {data=await response.json();}catch{throw new Error('Sunucudan geçerli yanıt alınamadı. Biraz sonra tekrar dene.');}
+            if (!response.ok || !data || !data.success) throw new Error(data?.error || 'Analiz başlatılamadı.');
             window.location.assign(data.result_url);
         } catch(error) {dialog.querySelector('.member-error').textContent = error.message;}
         finally {button.disabled = false;}

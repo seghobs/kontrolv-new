@@ -1,7 +1,7 @@
 import hashlib
 import time
 from pathlib import Path
-from flask import Flask, jsonify, request, redirect, session, g
+from flask import Flask, jsonify, request, redirect, session, g, render_template
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from app_core.config import get_config
 from app_core.routes.admin import admin_bp
@@ -83,13 +83,28 @@ def create_app():
         response.headers["Surrogate-Control"] = "no-store"
         return response
 
+    def error_response(status, title, message):
+        wants_html = (
+            not request.path.startswith('/api/')
+            and not request.is_json
+            and request.headers.get('X-Requested-With') != 'XMLHttpRequest'
+            and request.accept_mimetypes['text/html'] > request.accept_mimetypes['application/json']
+        )
+        if wants_html:
+            return render_template('error.html', status=status, title=title, message=message), status
+        return jsonify({'success': False, 'message': message}), status
+
+    @app.errorhandler(403)
+    def forbidden(_error):
+        return error_response(403, 'Yönetici girişi gerekli', 'Bu alanı açmak için yönetici hesabıyla giriş yapmalısın.')
+
     @app.errorhandler(404)
     def not_found(_error):
-        return jsonify({"success": False, "message": "Sayfa bulunamadi"}), 404
+        return error_response(404, 'Bu sayfa bulunamadı', 'Bağlantı değişmiş veya bu rapor artık mevcut olmayabilir.')
 
     @app.errorhandler(500)
     def server_error(_error):
-        return jsonify({"success": False, "message": "Sunucu hatasi"}), 500
+        return error_response(500, 'İşlem tamamlanamadı', 'Geçici bir sorun oluştu. Denetim geçmişinden durumunu kontrol edebilirsin.')
 
     @app.errorhandler(CSRFError)
     def handle_csrf_error(e):

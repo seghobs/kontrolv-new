@@ -47,3 +47,10 @@
     .history-table { min-width:700px; }
     .history-table td { padding:14px 10px; }
 }
+
+@media(max-width:760px){
+ .history-records .history-scroll{overflow:visible}.history-records .history-table{display:block;min-width:0}.history-records .history-table thead{display:none}.history-records .history-table tbody{display:grid;gap:12px}
+ .history-records .history-table tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border:1px solid var(--border);border-radius:14px;padding:14px;background:var(--secondary);gap:16px 12px}
+ .history-records .history-table td{display:block;border:0;padding:0;min-width:0;font-size:12px}.history-records .history-table td[data-label]::before{content:attr(data-label);display:block;margin-bottom:7px;font-size:9px;letter-spacing:.5px;color:var(--muted-foreground);font-weight:600;text-transform:uppercase}
+ .history-records .history-actions{grid-column:1/-1;border-top:1px solid var(--border)!important;padding-top:12px!important}.history-records .history-actions>a{width:100%;justify-content:center;min-height:40px}.history-records .history-empty{grid-column:1/-1}
+}

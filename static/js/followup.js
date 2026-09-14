@@ -2,8 +2,10 @@
     const feedback = text => { const el=document.getElementById('followup-feedback'); if(el) el.textContent=text; };
     async function json(url, body) {
         const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-        const data=await response.json();
-        if(!response.ok) throw new Error(data.error || data.message || 'İşlem tamamlanamadı.');
+        let data;
+        try{data=await response.json();}catch{throw new Error('Sunucudan geçerli yanıt alınamadı. Biraz sonra tekrar dene.');}
+        if(!data || typeof data!=='object')throw new Error('Sunucudan geçerli yanıt alınamadı.');
+        if(!response.ok || data.success===false) throw new Error(data.error || data.message || 'İşlem tamamlanamadı.');
         return data;
     }
     document.querySelectorAll('[data-timestamp]').forEach(el=>{
@@ -17,6 +19,7 @@
     }));
     document.querySelector('[data-filter]')?.addEventListener('change',event=>{
         document.querySelectorAll('.followup-post').forEach(post=>post.hidden=event.target.value!=='all'&&post.dataset.state!==event.target.value);
+        const empty=document.querySelector('[data-filter-empty]');if(empty)empty.hidden=[...document.querySelectorAll('.followup-post')].some(post=>!post.hidden);
     });
     document.querySelector('[data-sort]')?.addEventListener('change',event=>{
         const parent=document.querySelector('[data-posts]');
@@ -37,9 +40,11 @@
         catch{const field=document.createElement('textarea');field.value=text;button.after(field);field.select();feedback('Seçili hatırlatma metnini kopyalayabilirsiniz.');}
     }));
     document.querySelector('[data-batch]')?.addEventListener('submit',async event=>{
-        event.preventDefault();const form=event.target,button=form.querySelector('button'),data=new FormData(form),users=data.getAll('member');
+        event.preventDefault();const form=event.target;
+        if(form.dataset.busy==='true')return;
+        const button=form.querySelector('[data-batch-submit]'),data=new FormData(form),users=data.getAll('member');
         if(!users.length){feedback('En az bir üye seçin.');return;}
-        button.disabled=true;
+        form.dataset.busy='true';form.setAttribute('aria-busy','true');button.disabled=true;
         try {
             for(const username of users){
                 const task=await json('/api/member_analysis/'+form.dataset.batch,{username,date:data.get('date'),end_date:data.get('end_date'),skip_owner:data.has('skip_owner')});
@@ -51,6 +56,6 @@
             }
             feedback('Seçilen üyelerin analizleri tamamlandı. Sonuçları bağlantılardan açabilirsiniz.');
         }catch(error){feedback(error.message);}
-        finally{button.disabled=false;}
+        finally{button.disabled=false;delete form.dataset.busy;form.removeAttribute('aria-busy');}
     });
 })();

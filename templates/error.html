@@ -1,0 +1,5 @@
+{% extends 'followup_base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block body %}
+<section class="suite-empty suite-error" role="alert"><span class="member-eyebrow">{{ status }} · DENETİM MERKEZİ</span><i class="fas fa-{{ 'lock' if status==403 else 'circle-info' }}" aria-hidden="true"></i><h1>{{ title }}</h1><p>{{ message }}</p><nav class="member-nav">{% if status==403 %}<a href="{{ url_for('admin.login') }}">Yönetici girişi</a>{% endif %}<a href="{{ url_for('main.index') }}">Ana sayfa</a><a href="{{ url_for('history.index') }}">Denetim geçmişi</a></nav></section>
+{% endblock %}
