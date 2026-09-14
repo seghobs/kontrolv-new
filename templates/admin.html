@@ -53,7 +53,7 @@
                     <span class="header-subtitle">Instagram Automation & Security Engine</span>
                 </div>
             </div>
-            <nav class="header-navigation" aria-label="Sayfa gezinme">
+            <nav class="header-navigation" aria-label="Sayfa gezinme"><a class="logout-btn" href="/group-rules">Grup kuralları</a><a class="logout-btn" href="/backups">Yedekler</a><a class="logout-btn" href="/trash">Çöp kutusu</a>
                 <a href="{{ url_for('history.index') }}" class="logout-btn">Denetim Geçmişi</a>
                 <a href="{{ url_for('main.index') }}" class="logout-btn"><i class="fas fa-home" aria-hidden="true"></i> Ana Sayfa</a>
                 <a href="/admin/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Çıkış Yap</a>
@@ -739,7 +739,7 @@
             });
         });
     </script>
-{% if session.get("admin_logged_in") %}<nav class="member-nav" style="display:flex;gap:12px;flex-wrap:wrap;padding:18px"><a class="logout-btn" href="/group-rules">Grup kuralları</a><a class="logout-btn" href="/backups">Yedekler</a><a class="logout-btn" href="/trash">Çöp kutusu</a></nav>{% endif %}
+
 </body>
 
 </html>

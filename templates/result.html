@@ -82,6 +82,7 @@
                         </div>
                         <!-- Hızlı Güncelle / Yeniden Tarama Butonları -->
                         <div class="result-top-actions">
+                            {% if post_code %}<a href="/followup/{{ post_code }}" class="result-action-btn primary">Takip, analiz ve Excel</a>{% endif %}
                             <a href="{{ url_for('history.index') }}" class="result-action-btn primary"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i>Denetim Geçmişi</a>
                             <button type="button" class="result-action-btn primary" onclick="triggerRecheck(true)">
                                 <i class="fas fa-bolt"></i>
@@ -764,7 +765,7 @@
             });
         });
     </script>
-{% if post_code and not is_loading %}<nav class="action-buttons"><a class="btn" href="/followup/{{ post_code }}">Takip, analiz ve Excel</a></nav>{% endif %}
+
 </body>
 
 </html>
