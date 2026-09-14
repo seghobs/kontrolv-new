@@ -21,3 +21,7 @@
 @media(max-width:580px){.tools-page .tools-hero{padding:22px;gap:20px}.tools-page .header-titles h1{font-size:22px}.tools-overview{gap:8px}.tools-overview a{display:block;padding:13px 10px;font-size:10px}.tools-metric-icon{margin-bottom:12px}.tools-overview strong{font-size:22px}.tools-page .history-panel{padding:20px 16px}.tools-summary-grid{grid-template-columns:1fr}.tools-page .tools-preset>div{flex-basis:100%}.tools-preset form:first-of-type{margin-left:auto}.tools-page .tool-form{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.tools-page *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 .tools-admin-nav{display:flex;flex-wrap:wrap;gap:10px;padding:20px 0;margin-top:24px;border-top:1px solid var(--border)}.tools-admin-nav a{display:inline-flex;align-items:center;gap:8px}
+
+.tools-page .tools-preset .logout-btn:hover,
+.tools-page .tools-preset .logout-btn:focus-visible { background: #382a1e; color: #f5ede4; border-color: #c4956a; box-shadow: none; transform: none; }
+.tools-page .tools-preset .logout-btn:hover i { color: #d7ac82; }

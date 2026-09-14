@@ -348,9 +348,18 @@
                                                 <div class="instagram-icon-box">
                                                     <i class="fab fa-instagram" style="color: var(--accent-caramel); font-size: 14px;"></i>
                                                 </div>
-                                                <a href="{{ post }}" target="_blank" onclick="event.stopPropagation();" class="post-link-anchor">
+                                                <div class="missing-post-identity">
+                                                    {% set identity = namespace(owner='') %}
+                                                    {% for detail in links %}
+                                                        {% if detail.post_link.split('?')[0].rstrip('/').split('/')[-1] == post.split('?')[0].rstrip('/').split('/')[-1] and detail.sender %}
+                                                            {% set identity.owner = detail.sender %}
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                    <strong class="missing-post-owner">{{ '@' ~ identity.owner if identity.owner else 'Paylaşım sahibi alınamadı' }}</strong>
+                                                <a href="{{ post }}" target="_blank" rel="noopener" onclick="event.stopPropagation();" class="post-link-anchor">
                                                     {{ post }}
                                                 </a>
+                                                </div>
                                             </div>
                                             <button class="btn btn-sm" style="background: transparent; border: none; color: var(--muted-foreground); padding: 4px; flex-shrink: 0;" data-post="{{ post }}" onclick="event.stopPropagation(); window.copyToClipboard(this.dataset.post)" title="Kopyala" onmouseover="this.style.color='var(--accent-caramel)'" onmouseout="this.style.color='var(--muted-foreground)'">
                                                 <i class="fas fa-copy" style="font-size: 14px;"></i>

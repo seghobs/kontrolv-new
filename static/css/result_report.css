@@ -70,3 +70,19 @@
 /* Keep the permission action separated from the username, even in narrow rows. */
 .report-page .eksikler-list .list-group-item { column-gap: 12px !important; }
 .report-page .eksikler-list .username-text { flex: 0 1 auto; min-width: 0; }
+
+/* Readable multi-post reports, including narrow screens. */
+.report-page #completedList .username-text { min-width: 0; }
+.report-page #completedList .comment-preview-inline { white-space: normal !important; flex-basis: 100%; }
+.missing-post-identity { display: grid; gap: 5px; min-width: 0; }
+.missing-post-owner { color: var(--foreground); font-size: 13px; overflow-wrap: anywhere; }
+.report-page .post-link-item { padding: 12px; gap: 12px; border-bottom: 1px solid #c4956a18 !important; }
+#commentDetailModal .modal-content { max-height: 88dvh; overflow-y: auto; }
+#commentModalContent { font-style: normal !important; white-space: normal !important; color: var(--foreground) !important; }
+.comment-post-group + .comment-post-group { border-top: 1px solid #c4956a30; padding-top: 16px; margin-top: 16px; }
+.comment-post-group a { color: var(--accent-caramel); font-size: 12px; font-weight: 700; text-decoration: none; }
+.comment-post-group p { margin: 10px 0 0; white-space: pre-wrap; line-height: 1.7; }
+#commentDetailModal { z-index: 20000; }
+#commentDetailModal .modal-content { display: flex; flex-direction: column; overflow: hidden; }
+#commentDetailModal .modal-header, #commentDetailModal .modal-buttons { flex-shrink: 0; }
+#commentDetailModal .modal-body { overflow-y: auto; min-height: 0; }

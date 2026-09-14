@@ -18,7 +18,7 @@
             const comments = window.userComments[name] || [];
             if (comments.length) {
                 const display = comments.map(text => text || 'Yorum mevcut; metni alınamadı.');
-                preview.textContent = display.join(' • ');
+                preview.textContent = display.slice(0, 2).join(' • ') + (display.length > 2 ? ` · +${display.length - 2} yorum (görüntüle)` : '');
                 preview.title = display.join('\n');
             } else {
                 missing = true;

@@ -530,7 +530,28 @@ function renderCommentModal(username) {
     }
     
     if (contentBlock) {
-        if (comments.length === 0) {
+        const normalizeAuthor = value => String(value || '').trim().replace(/^@/, '').toLowerCase();
+        const matchedPosts = Object.values(window.postDetailsData || {}).map(post => ({
+            post, comments: (Array.isArray(post.comments_list) ? post.comments_list : []).filter(c => c && normalizeAuthor(c.username) === normalizeAuthor(username))
+        })).filter(entry => entry.comments.length);
+        if (matchedPosts.length) {
+            contentBlock.replaceChildren();
+            matchedPosts.forEach(({post, comments: entries}) => {
+                const section = document.createElement('section');
+                section.className = 'comment-post-group';
+                const heading = document.createElement('a');
+                heading.textContent = post.sender ? `@${post.sender} · Paylaşımı aç ↗` : 'Paylaşımı aç ↗';
+                if (/^https:\/\/(www\.)?instagram\.com\//i.test(post.link || '')) heading.href = post.link;
+                heading.target = '_blank'; heading.rel = 'noopener';
+                section.appendChild(heading);
+                entries.forEach(comment => {
+                    const text = document.createElement('p');
+                    text.textContent = typeof comment.text === 'string' && comment.text ? comment.text : 'Yorum mevcut; metni alınamadı.';
+                    section.appendChild(text);
+                });
+                contentBlock.appendChild(section);
+            });
+        } else if (comments.length === 0) {
             contentBlock.textContent = "(Yorum içeriği bulunamadı)";
         } else if (comments.length === 1) {
             contentBlock.textContent = comments[0] || 'Yorum mevcut; metni alınamadı.';
