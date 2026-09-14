@@ -1,3 +1,31 @@
+// Extend collapsed panel activation to the card padding without intercepting forms.
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.section-header[onclick]').forEach(header => {
+        const card = header.parentElement;
+        const body = card.querySelector(':scope > .section-body');
+        if (!body) return;
+        header.setAttribute('role', 'button');
+        header.tabIndex = 0;
+        header.setAttribute('aria-controls', body.id);
+        const sync = () => header.setAttribute('aria-expanded', String(!body.classList.contains('collapsed')));
+        sync();
+        new MutationObserver(sync).observe(body, {attributes: true, attributeFilter: ['class']});
+        header.addEventListener('keydown', event => {
+            if (event.target === header && (event.key === 'Enter' || event.key === ' ')) {
+                event.preventDefault();
+                header.click();
+            }
+        });
+        card.addEventListener('click', event => {
+            if (body.classList.contains('collapsed') && !header.contains(event.target) &&
+                !body.contains(event.target) && !event.target.closest('a,button,input,select,textarea,label')) {
+                header.click();
+            }
+        });
+        card.classList.add('expandable-admin-card');
+    });
+});
+
 function escapeHtml(text) {
     if (!text) return "";
     const map = {

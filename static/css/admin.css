@@ -546,6 +546,14 @@ body.page-transitioning-out {
     transition: transform 0.3s ease;
 }
 
+.expandable-admin-card:has(> .section-body.collapsed) {
+    cursor: pointer;
+}
+.section-header[role="button"]:focus-visible {
+    outline: 2px solid var(--accent-caramel);
+    outline-offset: 4px;
+}
+
 .section-header.open .chevron-icon {
     transform: rotate(180deg);
 }
