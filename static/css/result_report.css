@@ -66,3 +66,7 @@
 .report-page #completedList .username-text { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px; row-gap: 5px; flex: 1; }
 .report-page #completedList .comment-preview-inline { flex: 1 1 150px; min-width: 0; color: #bca58f; font-size: 12px; font-weight: 400; line-height: 1.65; font-style: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .report-page #completedList .comment-preview-inline::before { content: '— '; color: #876d55; }
+
+/* Keep the permission action separated from the username, even in narrow rows. */
+.report-page .eksikler-list .list-group-item { column-gap: 12px !important; }
+.report-page .eksikler-list .username-text { flex: 0 1 auto; min-width: 0; }
