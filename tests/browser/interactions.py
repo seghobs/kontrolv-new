@@ -2,13 +2,20 @@ from pathlib import Path
 Path("scratch").mkdir(exist_ok=True)
 from playwright.sync_api import sync_playwright
 import json
+
+def choose(page, selector, value):
+    select=page.locator(selector)
+    text=select.evaluate("(e,value)=>[...e.options].find(o=>o.value===value).textContent",value)
+    select.locator('xpath=following-sibling::button[1]').click()
+    page.locator('.coffee-select-option').filter(has_text=text).click()
+
 with sync_playwright() as p:
  browser=p.chromium.launch(headless=True,channel='chrome')
  context=browser.new_context(permissions=['clipboard-read','clipboard-write'],viewport={'width':390,'height':844})
  page=context.new_page(); errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
  page.goto('http://127.0.0.1:5087/followup/'+'a'*32)
  page.click('[data-copy-user="bob"]');assert '@bob' in page.evaluate('navigator.clipboard.readText()')
- page.select_option('[data-copy-format]','links');page.locator('[data-copy-post]').first.click();assert page.evaluate('navigator.clipboard.readText()')=='https://www.instagram.com/p/ABC'
+ choose(page,'[data-copy-format]','links');page.locator('[data-copy-post]').first.click();assert page.evaluate('navigator.clipboard.readText()')=='https://www.instagram.com/p/ABC'
  calls=[]
  def start(route):
   calls.append(route.request.post_data_json['username']);route.fulfill(json=dict(success=True,job_id='b'*32,result_url='/member-analysis/'+'b'*32))
@@ -18,7 +25,7 @@ with sync_playwright() as p:
  page.fill('[name=date]','2026-09-01');page.fill('[name=end_date]','2026-09-02');page.locator('[data-batch] button').last.click()
  page.wait_for_function("document.querySelectorAll('[data-batch-results] li').length===2")
  assert calls==['alice','bob'];assert page.locator('[data-batch-results]').inner_text().count('Tamamlandı')==2
- page.select_option('[data-sort]','missing');assert page.locator('.followup-post').first.get_attribute('data-missing')=='1'
+ choose(page,'[data-sort]','missing');assert page.locator('.followup-post').first.get_attribute('data-missing')=='1'
  page.goto('http://127.0.0.1:5087/')
  page.locator('summary').filter(has_text='Mesajdan').click()
  page.fill('[data-pasted-message]','mesaj https://instagram.com/p/ABC/ https://instagram.com/reel/ABC/')

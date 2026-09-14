@@ -27,4 +27,5 @@
 <section id="activity" class="history-panel tools-activity"><div class="history-section-heading"><span class="history-section-icon"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i></span><div><h2>İşlem Günlüğü</h2><p>Son 100 işlem. Ortak yönetici hesabı kullanıldığı için işlemler kişi adıyla ayrıştırılmaz.</p></div></div>
 <div class="tools-timeline">{% for item in logs %}<div class="tool-row"><div><strong>{{ item.action }}</strong><p class="tool-muted">{{ item.entity_id }} · {{ item.created_at[:19]|replace('T',' ') }}</p></div></div>{% else %}<p class="tool-muted">Yaptığın işlemler burada sıralanacak.</p>{% endfor %}</div></section>
 </main>{% if session.get("admin_logged_in") %}<nav class="member-nav" style="display:flex;gap:12px;flex-wrap:wrap;padding:18px"><a class="logout-btn" href="/group-rules">Grup kuralları</a><a class="logout-btn" href="/backups">Yedekler</a><a class="logout-btn" href="/trash">Çöp kutusu</a></nav>{% endif %}
+    {% include "_select_modal.html" %}
 </body></html>
