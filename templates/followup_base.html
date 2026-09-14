@@ -1,1 +1,28 @@
-<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{% block title %}Denetim Takibi{% endblock %}</title><link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="{{ url_for('static',filename='css/member_analysis.css') }}"><link rel="stylesheet" href="{{ url_for('static',filename='css/followup.css') }}"></head><body class="member-page"><main><nav class="member-nav"><a href="/">Ana sayfa</a><a href="/history">Denetim geçmişi</a><a href="/tools">Araçlar</a>{% if session.get('admin_logged_in') %}<a href="/group-rules">Grup kuralları</a><a href="/backups">Yedekler</a><a href="/trash">Çöp kutusu</a>{% endif %}</nav>{% block body %}{% endblock %}<p id="followup-feedback" role="status"></p></main><script src="{{ url_for('static',filename='js/followup.js') }}"></script></body></html>
+<!doctype html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>{% block title %}Denetim Takibi{% endblock %} · Yorum Kontrolleri</title>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/member_analysis.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/followup.css') }}">
+</head>
+<body class="member-page followup-page">
+<main class="form-card followup-shell">
+    <div class="form-header-wrap suite-brand">
+        <a class="form-header-badge" href="/" aria-label="Ana sayfa"><i class="fas fa-comments" aria-hidden="true"></i></a>
+        <div class="form-header-text"><h2>Yorum Kontrolleri</h2><span class="form-header-sub">Instagram Gönderi & Yorum Denetim Sistemi</span></div>
+        <a class="suite-home" href="/"><i class="fas fa-arrow-left" aria-hidden="true"></i><span>Kontrole dön</span></a>
+    </div>
+    <nav class="suite-nav" aria-label="Denetim merkezi">
+        {% for href,label,icon in [('/history','Denetim geçmişi','clock-rotate-left'),('/tools','Araçlar','sliders')] %}<a href="{{ href }}" {% if request.path==href %}aria-current="page"{% endif %}><i class="fas fa-{{ icon }}" aria-hidden="true"></i>{{ label }}</a>{% endfor %}
+        {% if session.get('admin_logged_in') %}{% for href,label,icon in [('/group-rules','Grup kuralları','layer-group'),('/backups','Yedekler','database'),('/trash','Çöp kutusu','trash-can')] %}<a href="{{ href }}" {% if request.path==href %}aria-current="page"{% endif %}><i class="fas fa-{{ icon }}" aria-hidden="true"></i>{{ label }}</a>{% endfor %}{% endif %}
+    </nav>
+    {% block body %}{% endblock %}
+    <p id="followup-feedback" role="status" aria-live="polite"></p>
+    <footer class="suite-footer"><i class="fas fa-shield-halved" aria-hidden="true"></i> Denetim merkezi <span>Yorum Kontrolleri</span></footer>
+</main>
+<script src="{{ url_for('static',filename='js/followup.js') }}"></script>
+</body></html>

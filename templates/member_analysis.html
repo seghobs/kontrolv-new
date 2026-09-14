@@ -1,14 +1,7 @@
-<!doctype html>
-<html lang="tr">
-<head>
-    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>@{{ job.payload.username }} · Günlük Analiz</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static',filename='css/member_analysis.css') }}">
-</head>
-<body class="member-page"><main>
+{% extends 'followup_base.html' %}
+{% block title %}@{{ job.payload.username }} · Üye analizi{% endblock %}
+{% block body %}
+
     <nav class="member-nav"><a href="/result/{{ job.parent_id }}"><i class="fas fa-arrow-left" aria-hidden="true"></i> Önceki rapor</a><a href="/history"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> Denetim geçmişi</a></nav>
     <header class="member-hero">
         <div class="member-identity"><span class="member-avatar" aria-hidden="true"><i class="fas fa-user-check"></i></span><div><span class="member-eyebrow">ÜYEYE ÖZEL GÜNLÜK ANALİZ</span><h1>@{{ job.payload.username }}</h1><div class="member-meta"><span><i class="far fa-calendar" aria-hidden="true"></i> {{ job.payload.date[8:10] }}.{{ job.payload.date[5:7] }}.{{ job.payload.date[:4] }}</span><span><i class="{{ 'far fa-heart' if job.payload.check_likes else 'far fa-comment' }}" aria-hidden="true"></i> {{ 'Yorum + Beğeni kontrolü' if job.payload.dual_check else ('Beğeni kontrolü' if job.payload.check_likes else 'Yorum kontrolü') }}</span></div></div></div>
@@ -58,4 +51,5 @@
     <script src="{{ url_for('static',filename='js/result_polling.js') }}"></script><script>startResultPolling({{ job.id|tojson }});</script>
     {% else %}<section class="member-processing"><span class="member-section-icon"><i class="fas fa-circle-info" aria-hidden="true"></i></span><div><h2>Analiz tamamlanamadı</h2><p role="alert">{{ status.error or status.message }}</p></div></section>{% endif %}
     <footer class="member-footnote"><i class="fas fa-circle-info" aria-hidden="true"></i><p>Tarih, paylaşımın gruba gönderildiği gündür. Güncel yorum ve beğeniler gösterilir; kişisel analizde yalnız seçilen kendi paylaşımı muafiyeti uygulanır.</p></footer>
-</main></body></html>
+
+{% endblock %}
