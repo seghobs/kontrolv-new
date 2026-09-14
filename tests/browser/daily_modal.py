@@ -8,9 +8,9 @@ with sync_playwright() as p:
  page.add_script_tag(content=Path('static/js/member_analysis.js').read_text(encoding='utf-8'))
  for width in [390,1100]:
   page.set_viewport_size({'width':width,'height':844});page.locator('.member-analyze-button').click()
-  page.locator('[name=date]').fill('2026-09-14');page.locator('[name=end_date]').fill('2026-09-15')
+  page.locator('[name=date]').evaluate("e=>{e.value='2026-09-14';e.dispatchEvent(new Event('change'))}");page.locator('[name=end_date]').evaluate("e=>{e.value='2026-09-15';e.dispatchEvent(new Event('change'))}")
   assert page.locator('.daily-analysis-dialog').evaluate('(e)=>e.scrollWidth<=e.clientWidth')
-  a=page.locator('[name=date]').bounding_box();c=page.locator('[name=end_date]').bounding_box();assert abs(a['y']-c['y'])<2
+  a=page.locator('[data-date-field=date]').bounding_box();c=page.locator('[data-date-field=end_date]').bounding_box();assert abs(a['y']-c['y'])<2
   page.screenshot(path=f'scratch/daily-modal-{width}.png')
   page.locator('.member-close').click();assert not page.locator('dialog').is_visible()
  page.locator('.member-analyze-button').click();page.locator('[name=skip_owner]').uncheck();page.locator('[type=submit]').click()
