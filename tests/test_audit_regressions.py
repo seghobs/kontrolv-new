@@ -28,8 +28,11 @@ class AuditRegressions(unittest.TestCase):
     def test_partial_likers_cannot_mark_absent_members_missing(self):
         for sync in (False,True):
             for details in ({'like_count':10,'like_count_verified':True},{'like_count':0}):
-                with self.subTest(sync=sync,details=details), self.assertRaises(main.ControlUnavailable):
-                    self.control(likes=True,details=details,likers={'alice'},sync=sync)
+                with self.subTest(sync=sync,details=details):
+                    result,_,_=self.control(likes=True,details=details,likers={'alice'},sync=sync)
+                    self.assertTrue(result['links'][0]['error'])
+                    self.assertEqual(result['links'][0]['eksikler'],[])
+                    self.assertEqual(result['all_commented'],[])
 
     def test_partial_positive_likers_are_valid_when_everyone_is_found(self):
         result,_,_=self.control(likes=True,details={'like_count':10,'like_count_verified':True},likers={'alice','bob'})

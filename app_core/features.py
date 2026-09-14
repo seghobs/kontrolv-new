@@ -8,6 +8,12 @@ from app_core import storage, jobs
 
 
 def record_change(conn, kind, target, before, after, action):
+    if kind == 'grup ayarı':
+        remaining = {row['thread_id'] for row in (after or [])}
+        for row in (before or []):
+            if row['thread_id'] not in remaining:
+                trash = dict(key='automation:'+row['thread_id'],label='Grup ayarı '+(row.get('group_name') or row['thread_id']),value=json.dumps(row),expires=time.time()+30*86400)
+                conn.execute('INSERT INTO key_value(key,value) VALUES (?,?)',('trash:'+uuid.uuid4().hex,json.dumps(trash)))
     identifier = uuid.uuid4().hex
     entry = dict(kind=kind, target=target, before=before, after=after, expires=time.time()+60)
     conn.execute("INSERT INTO key_value(key,value) VALUES (?,?)", ('undo_'+identifier,json.dumps(entry)))
@@ -116,4 +122,4 @@ def run_preset(payload, progress_callback):
     if not users:raise RuntimeError('Kontrol edilecek üye bulunamadı.')
     return run_manual_control('\n'.join(p['url'] for p in posts),' '.join(users),tid,
                               [p['url']+'|'+p['username'] for p in posts if p.get('username')],
-                              payload['check_likes'],progress_callback=progress_callback)
+                              payload['check_likes'],progress_callback=progress_callback,shared_dates={p['url']:p['shared_at'] for p in posts if p.get('shared_at')})

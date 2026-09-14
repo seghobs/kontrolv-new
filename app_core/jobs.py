@@ -5,6 +5,10 @@ import uuid
 from contextlib import contextmanager
 
 
+class ControlStopped(RuntimeError):
+    """Cancellation or execution budget reached; do not start fallback requests."""
+
+
 def init_schema(conn):
     from app_core.sqlite_schema import init_schema as upgrade
     upgrade(conn)

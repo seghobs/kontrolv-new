@@ -114,6 +114,9 @@ def get_groups():
 @main_bp.route("/api/get_group_members/<thread_id>", methods=["GET"])
 def get_group_members(thread_id):
     result = fetch_group_members_with_failover(thread_id)
+    if result.get('ok'):
+        from app_core.followup import track_members
+        result['changes'] = track_members(thread_id, result.get('members', []))
     return jsonify(result)
 
 
@@ -135,6 +138,11 @@ def get_group_posts(thread_id):
             target_date = now
     
     result = fetch_group_media_with_failover(thread_id, target_date)
+    if result.get('ok'):
+        from app_core.followup import write, read, link_key
+        dates=read('shared-dates:'+thread_id,{})
+        dates.update({link_key(p['url']):p['shared_at'] for p in result.get('posts',[]) if p.get('url') and p.get('shared_at')})
+        write('shared-dates:'+thread_id,dates)
     return jsonify(result)
 
 
@@ -185,13 +193,18 @@ def clean_word_count(text):
     return len(words)
 
 
-def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes, only_missing=False, prev_result=None, progress_callback=None):
+def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes, only_missing=False, prev_result=None, progress_callback=None, unknown_only=False, checkpoints=None, save_checkpoint=None, shared_dates=None):
     active_working_token = get_working_active_token()
     if not active_working_token:
         raise ValueError("Tum hesaplar cikis yapmis gorunuyor. Lutfen admin panelden gecerli bir token girin.")
 
     grup_uye_kullanicilar = {normalize_username(u) for u in grup_uye.split() if u.strip()}
-    links_raw = [l.strip().rstrip('/') for l in link.split("\n") if l.strip()]
+    from app_core.followup import rules_for, link_key
+    rules = rules_for(thread_id)
+    if shared_dates is None:
+        from app_core.followup import read
+        shared_dates=read('shared-dates:'+str(thread_id),{})
+    links_raw = list(dict.fromkeys(l.strip().rstrip('/') for l in link.split("\n") if l.strip()))
     if not links_raw or any(donustur(url) is None for url in links_raw):
         raise ControlUnavailable("Geçersiz paylaşım bağlantısı var. Bağlantıları kontrol edin.")
     
@@ -223,13 +236,21 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
         tracker = {"done": 0, "total": len(links_raw)}
         
         async def _fetch_single(link_single):
-            if only_missing and prev_result:
+            if link_key(link_single) in {link_key(u) for u in rules['excluded']}:
+                return dict(post_link=link_single,eksikler=[],commenters=[],comments_list=[],skipped_reason='Paylaşım kapsam dışında')
+            if checkpoints and link_single in checkpoints:
+                restored = dict(checkpoints[link_single])
+                restored['commenters_normalized'] = set(restored.get('commenters_normalized', []))
+                restored['source'] = 'checkpoint'
+                return restored
+            if (only_missing or unknown_only) and prev_result:
                 prev_link_res = next((lr for lr in prev_result.get("links", []) if lr.get("post_link", "").strip().rstrip('/') == link_single), None)
-                if prev_link_res and not prev_link_res.get("error") and not prev_link_res.get("eksikler"):
+                if prev_link_res and not prev_link_res.get("error") and (unknown_only or not prev_link_res.get("eksikler")):
                     tracker["done"] += 1
                     if progress_callback:
                         progress_callback(tracker["done"], tracker["total"], f"Gönderi {tracker['done']}/{tracker['total']} atlandı (Tamamlanmış)")
                     reused = dict(prev_link_res)
+                    reused['source'] = 'previous'
                     reused['comments_list'] = [
                         (comment['username'], comment['text']) if isinstance(comment, dict) else tuple(comment)
                         for comment in prev_link_res.get('comments_list', [])
@@ -260,7 +281,7 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
                 
                 izinli_uyeler = exemptions_by_link[link_single]
                 all_exempted_for_link = izinli_uyeler | global_exempted
-                if post_sender:
+                if post_sender and rules['skip_owner']:
                     all_exempted_for_link.add(post_sender)
 
                 commenters_normalized = set()
@@ -336,7 +357,18 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
             headers={"Accept-Encoding": "gzip, deflate"},
             skip_auto_headers={"Accept-Encoding", "accept-encoding"}
         ) as session:
-            tasks = [_fetch_single(l) for l in links_raw]
+            async def saved(url):
+                try:
+                    row = await _fetch_single(url)
+                except ControlUnavailable as error:
+                    row = dict(post_link=url, eksikler=[], commenters=[], comments_list=[], error=str(error))
+                import time
+                row.setdefault('checked_at', time.time())
+                row.setdefault('source', 'live')
+                if save_checkpoint:
+                    save_checkpoint(url, {**row, 'commenters_normalized': list(row.get('commenters_normalized', []))})
+                return row
+            tasks = [saved(l) for l in links_raw]
             return await asyncio.gather(*tasks)
 
     # Execute async loop
@@ -346,17 +378,22 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
     except ControlUnavailable:
         raise
     except Exception as e:
+        from app_core.jobs import ControlStopped
+        if isinstance(e, ControlStopped): raise
         logger.warning(f"aiohttp paralel çalıştırma hatası ({e}), sıralı moda geçiliyor...")
         fetched_results = []
         # Fallback sync
         for link_single in links_raw:
+            if link_key(link_single) in {link_key(u) for u in rules['excluded']}:
+                fetched_results.append(dict(post_link=link_single,eksikler=[],commenters=[],comments_list=[],skipped_reason='Paylaşım kapsam dışında'))
+                continue
             media_id = donustur(link_single)
             if not media_id: continue
             post_details = get_post_details(media_id, working_token) or {}
             post_sender = post_senders.get(link_single) or (normalize_username(post_details.get("sender")) if post_details.get("sender") else None)
             izinli_uyeler = exemptions_by_link[link_single]
             all_exempted_for_link = izinli_uyeler | global_exempted
-            if post_sender: all_exempted_for_link.add(post_sender)
+            if post_sender and rules['skip_owner']: all_exempted_for_link.add(post_sender)
             if check_likes:
                 if post_details.get('like_count', 0) > 90:
                     fetched_results.append(dict(post_details, post_link=link_single, sender=post_sender,
@@ -373,10 +410,14 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
             if not check_likes and isinstance(all_result, dict) and all_result.get('incomplete'):
                 fetched_results.append(incomplete_comment_post(link_single, post_details, post_sender, comments_list))
                 continue
-            require_complete_result(all_result)
-            eksikler = grup_uye_kullanicilar - all_exempted_for_link - commenters_normalized
-            if check_likes:
-                require_complete_likers(post_details, commenters_normalized, eksikler)
+            try:
+                require_complete_result(all_result)
+                eksikler = grup_uye_kullanicilar - all_exempted_for_link - commenters_normalized
+                if check_likes:
+                    require_complete_likers(post_details, commenters_normalized, eksikler)
+            except ControlUnavailable as error:
+                fetched_results.append(dict(post_details, post_link=link_single, eksikler=[], commenters=[], comments_list=[], error=str(error)))
+                continue
             tamamlayanlar = grup_uye_kullanicilar - all_exempted_for_link - eksikler
             fetched_results.append({
                 "post_link": link_single,
@@ -403,6 +444,9 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
         link_single = res.get("post_link")
         link_results.append({
             "post_link": link_single,
+            "checked_at": res.get('checked_at', __import__('time').time()),
+            "source": res.get('source', 'live'),
+            "skipped_reason": res.get('skipped_reason'),
             "eksikler": res.get("eksikler", []),
             "commenters": res.get("commenters", []),
             "sender": res.get("sender"),
@@ -432,7 +476,7 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
             user_comments_map[norm_uname].append(text)
             
             if norm_uname in grup_uye_kullanicilar and thread_id:
-                is_valid = 1 if (has_emoji(text) and clean_word_count(text) >= 2) else 0
+                is_valid = 1 if ((not rules['require_emoji'] or has_emoji(text)) and clean_word_count(text) >= rules['min_words']) else 0
                 comment_records.append((thread_id, norm_uname, post_code, text, is_valid))
 
         for eksik in res.get("eksikler", []):
@@ -464,11 +508,15 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
     for user, comments in user_comments_map.items():
         has_any_valid = False
         for comment in comments:
-            if has_emoji(comment) and clean_word_count(comment) >= 2:
+            if (not rules['require_emoji'] or has_emoji(comment)) and clean_word_count(comment) >= rules['min_words']:
                 has_any_valid = True
                 break
         if not has_any_valid and all(comments):
             invalid_comment_users.add(user)
+
+    from app_core.followup import apply_rules
+    adjusted = apply_rules({'links':link_results, 'group':list(grup_uye_kullanicilar)}, thread_id, shared_dates)
+    user_missing_posts = adjusted['user_missing_posts']
 
     # Collect all exempted users from all links + global exemptions
     all_exempted = global_exempted.copy()
@@ -477,7 +525,9 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
         all_exempted.update(exemptions_by_link[lr["post_link"]])
         eksikler_all.update(lr.get("eksikler", []))
     
-    tamamlayanlar_genel = grup_uye_kullanicilar - all_exempted - eksikler_all
+    responsibility_unknown = {u for lr in link_results for u in lr.get('unknown_members', [])}
+    completed_any = {u for lr in link_results for u in lr.get('commenters', [])}
+    tamamlayanlar_genel = completed_any - all_exempted - eksikler_all - responsibility_unknown
     if any(lr.get('error') for lr in link_results):
         # Skipped/unverified posts cannot establish completion of the whole run.
         tamamlayanlar_genel = set()
@@ -498,8 +548,8 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
         add_audit_log(
             entity_type="manuel_kontrol",
             entity_id=post_link,
-            action="kontrol_yapildi",
-            details=f"{sender_prefix}Saat {now_str} - {kontrol_tipi} Kontrolü: {grup_sayisi} üyeden {eksik_sayisi} eksik tespit edildi."
+            action="kontrol_dogrulanamadi" if lr.get("error") else "kontrol_yapildi",
+            details=lr.get("error") or f"{sender_prefix}Saat {now_str} - {kontrol_tipi} Kontrolü: {grup_sayisi} üyeden {eksik_sayisi} eksik tespit edildi."
         )
 
     # Cache run result in DB if thread_id
@@ -621,10 +671,15 @@ def recheck_post(post_code):
         return jsonify({"success": False, "message": "Denetim girdileri bulunamadı."}), 404
     if source and source['state'] in ('queued', 'running', 'cancelling'):
         return jsonify({"success": False, "message": "Denetim zaten sırada veya çalışıyor."}), 409
-    if source and source['kind'] != 'manual':
+    if source and source['kind'] not in ('manual','preset'):
         return jsonify({"success": False, "message": "Otomasyonu yönetim panelinden yeniden başlatın."}), 400
     inputs = json.loads(inputs_json)
+    if source and source['kind']=='preset':
+        result=source['result'] or {}
+        inputs=dict(link='\n'.join(p['post_link'] for p in result.get('links',[])),grup_uye=' '.join(result.get('group',[])),thread_id=result.get('thread_id',''),
+                    post_senders_raw=[p['post_link']+'|'+p['sender'] for p in result.get('links',[]) if p.get('sender')],check_likes=bool(result.get('check_likes')))
     inputs['only_missing'] = bool(data.get('only_missing', False))
+    inputs['unknown_only'] = bool(data.get('unknown_only', False))
     job_id = enqueue('manual', inputs, parent_id=post_code if source else None)
     return jsonify({"success": True, "result_url": url_for('main.result_page_new', post_code=job_id)})
 
@@ -632,7 +687,8 @@ def recheck_post(post_code):
 @main_bp.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
-        link = request.form.get("post_link", "").strip()
+        from app_core.followup import extract_links, rules_for
+        link = request.form.get('post_link', '').strip()
         def invalid_input(message):
             if request.accept_mimetypes.best == 'application/json':
                 return jsonify(success=False, message=message), 400
@@ -644,6 +700,8 @@ def index():
         thread_id = request.form.get("thread_id", "").strip()
         post_senders_raw = request.form.getlist("post_senders")
         check_likes = request.form.get("check_likes") == "on"
+        policy = rules_for(thread_id)
+        if policy['mode'] != 'selected': check_likes = policy['mode'] == 'likes'
 
         # Post kodunu ayıkla
         import re

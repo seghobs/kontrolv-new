@@ -13,6 +13,7 @@
     }
     function follow(jobId) {
         setBusy(true);
+        try {localStorage.setItem('last-control',jobId);} catch {}
         const url = new URL(window.location.href);
         url.searchParams.set('task', jobId);
         window.history.replaceState(null, '', url);
@@ -24,6 +25,7 @@
     }
     window.submitControl = async (form) => {
         if (active) return;
+        if (window.confirmControlScope && !(await window.confirmControlScope(form))) return;
         setBusy(true);
         message().textContent = 'Denetim başlatılıyor…';
         try {

@@ -2,7 +2,7 @@
     if (!window.postCode || !window.resultThreadId) return;
     const dialog = document.createElement('dialog');
     dialog.className = 'member-dialog';
-    dialog.innerHTML = `<form><h2>Üyeye özel günlük analiz</h2><p class="member-name"></p><label>Gruba paylaşım yapılan tarih<input type="date" required name="date"></label><p>Seçilen günün tüm gönderi ve Reels’leri, hem yorum hem beğeni için kontrol edilir. İki eksik listesi ayrı kopyalanabilir. Yeni bir sonuç açılır.</p><p role="alert" class="member-error"></p><div class="member-actions"><button type="button" class="member-close">Vazgeç</button><button type="submit">Analiz Et</button></div></form>`;
+    dialog.innerHTML = `<form><h2>Üyeye özel günlük analiz</h2><p class="member-name"></p><label>Gruba paylaşım yapılan tarih<input type="date" required name="date"></label><label>Bitiş tarihi (isteğe bağlı)<input type="date" name="end_date"></label><label><input type="checkbox" name="skip_owner" checked> Kendi paylaşımını hariç tut</label><p>Seçilen günün tüm gönderi ve Reels’leri, hem yorum hem beğeni için kontrol edilir. İki eksik listesi ayrı kopyalanabilir. Yeni bir sonuç açılır.</p><p role="alert" class="member-error"></p><div class="member-actions"><button type="button" class="member-close">Vazgeç</button><button type="submit">Analiz Et</button></div></form>`;
     document.body.append(dialog);
     let username = '';
     dialog.querySelector('.member-close').onclick = () => dialog.close();
@@ -22,7 +22,7 @@
         try {
             const response = await fetch('/api/member_analysis/' + encodeURIComponent(window.postCode), {
                 method:'POST',headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({username, date:dialog.querySelector('[name=date]').value})
+                body:JSON.stringify({username, date:dialog.querySelector('[name=date]').value,end_date:dialog.querySelector('[name=end_date]').value,skip_owner:dialog.querySelector('[name=skip_owner]').checked})
             });
             const data = await response.json();
             if (!response.ok || !data.success) throw new Error(data.error || 'Analiz başlatılamadı.');

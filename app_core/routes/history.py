@@ -136,8 +136,8 @@ def undo(identifier):
 
 @history_bp.route('/tools/presets/<identifier>/delete',methods=['POST'])
 def delete_preset(identifier):
-    with jobs.transaction() as conn:
-        conn.execute('DELETE FROM key_value WHERE key=?',('preset_'+identifier,))
+    from app_core.routes.followup import move_to_trash
+    move_to_trash('preset_'+identifier, 'Denetim şablonu')
     from app_core.storage import add_audit_log
     add_audit_log('şablon',identifier,'Denetim şablonu silindi','Yönetici oturumu')
     return redirect(url_for('history.tools_page'))

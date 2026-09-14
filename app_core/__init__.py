@@ -51,6 +51,8 @@ def create_app():
     app.register_blueprint(admin_bp)
     from app_core.routes.history import history_bp
     app.register_blueprint(history_bp)
+    from app_core.routes.followup import bp as followup_bp
+    app.register_blueprint(followup_bp)
 
     @app.before_request
     def make_session_permanent():

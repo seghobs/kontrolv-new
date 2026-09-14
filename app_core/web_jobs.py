@@ -25,9 +25,9 @@ def execute_claimed(job):
     def check_active():
         current = jobs.get_job_state(job_id)
         if not current or current['state'] != 'running' or current['owner'] != owner:
-            raise RuntimeError('Denetim durduruldu.')
+            raise jobs.ControlStopped('Denetim durduruldu.')
         if time.monotonic() - started > 150:
-            raise RuntimeError('İstek süresi aşıldı; daha az gönderi seçerek yeniden deneyin.')
+            raise jobs.ControlStopped('İstek süresi aşıldı; denetim geçmişinden kalan paylaşımlara devam edebilirsiniz.')
     def progress(current, total, message):
         check_active()
         jobs.progress(job_id, owner, current, total, message)
@@ -38,9 +38,25 @@ def execute_claimed(job):
             parent = jobs.get_job(job['parent_id']) if job['parent_id'] else None
             payload['prev_result'] = parent['result'] if parent else None
             payload['progress_callback'] = progress
+            from app_core.followup import read, write
+            checkpoint_key = 'checkpoint:' + job_id
+            checkpoints = read(checkpoint_key, {})
+            if not checkpoints and parent and parent['state'] in ('failed','cancelled'):
+                checkpoints = read('checkpoint:' + parent['id'], {})
+            payload['checkpoints'] = checkpoints
+            def checkpoint(url, row):
+                checkpoints[url] = row
+                write(checkpoint_key, checkpoints)
+            payload['save_checkpoint'] = checkpoint
             result = run_manual_control(**payload)
         elif job['kind'] == 'member':
             from app_core.member_analysis import run
+            from app_core.followup import read, write
+            if job['parent_id']:
+                prior=jobs.get_job(job['parent_id'])
+                if prior and prior['state']=='failed' and not read('member-checkpoint:'+job_id):
+                    write('member-checkpoint:'+job_id,read('member-checkpoint:'+prior['id'],{}))
+            payload['_job_id'] = job_id
             result = run(payload, progress)
         elif job['kind'] == 'preset':
             from app_core.features import run_preset

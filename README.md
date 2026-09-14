@@ -370,7 +370,7 @@ node tests/test_member_copy.mjs
 node tests/test_result_polling.cjs
 ```
 
-**Son doğrulama — 14 Eylül 2026:** 124 Python testi ve beş JavaScript test grubu başarılı. Kurulum testleri yedekleme, veri seçimi, şifre koruma, tekrar çalıştırma ve yapılandırma geri dönüşü senaryolarını kapsar. Bunlar canlı PythonAnywhere hesabında sıfırdan kurulmuş uçtan uca bir ortam testinin yerine geçmez.
+**Son doğrulama — 14 Eylül 2026:** 145 Python testi ve beş JavaScript test grubu başarılı. Kurulum testleri yedekleme, veri seçimi, şifre koruma, tekrar çalıştırma ve yapılandırma geri dönüşü senaryolarını kapsar. Bunlar canlı PythonAnywhere hesabında sıfırdan kurulmuş uçtan uca bir ortam testinin yerine geçmez.
 
 Test keşfini `tests` diziniyle sınırlandırın. Yerel deneme dosyaları üretim test paketine dahil değildir.
 
@@ -445,3 +445,23 @@ Hesap kotaları, ağ bağlantısı, Python sürümü ve API erişimi kurulumu et
 [Kaynak kod](https://github.com/seghobs/kontrolv-new) · [Hata bildir](https://github.com/seghobs/kontrolv-new/issues) · [PythonAnywhere API belgeleri](https://help.pythonanywhere.com/pages/API/)
 
 </div>
+
+
+## Sonuç takibi ve grup kuralları
+
+Raporun **Takip, analiz ve Excel** bağlantısından değişiklik özetini, ayrı belirsiz listesini, son kontrol zamanını, üyeye özel hatırlatma metnini ve Excel matrisini açabilirsiniz. Eksikleri veya yalnız doğrulanamayanları tekrar kontrol etmek yeni bir rapor oluşturur. Eski rapor değiştirilmez.
+
+- **Üye kartı:** Kullanıcı bağlantısından son 24 saat, 7 gün veya 30 gündeki kayıtlı sonuçları görün. Hesap kimliği doğrulanmış ad değişiklikleri geçmişle eşleştirilir.
+- **Toplu analiz:** Üyeleri ve en fazla 31 günlük tarih aralığını seçin. Her üye için yorum ve beğeni birlikte kontrol edilir; mevcut ayrı kopyalama listeleri korunur. İşlemler sırayla yürütülür.
+- **Grup kuralları:** Admin panelinden kontrol türünü, minimum kelime ve emoji şartını, telafi süresini, katılım tarihlerini, izinleri ve kapsam dışı paylaşımları ayarlayın. Tarih bilinmiyorsa tarihli bir kuraldan kesin eksik kararı çıkarılmaz. Kişisel analizde grup kuralları yerine yalnız seçilen kendi paylaşımı muafiyeti uygulanır.
+- **Kopyalama ve inceleme:** Kullanıcıya özel hatırlatma veya paylaşım bazında bağlantı/kullanıcı listesi kopyalayın. Mesajlar otomatik gönderilmez. İtiraz notları sonuçtan ayrı saklanır.
+- **Yedekler ve çöp kutusu:** Yalnız yönetici yedek indirebilir. Silinen şablon ve grup ayarları 30 gün geri alınabilir; sonradan oluşturulan ayarların üzerine yazılmaz.
+- **Kesintiler:** Tamamlanan paylaşımlar ara kayıt olarak tutulur. Süre dolarsa geçmişten yeniden deneme, uygun ara kayıtları kullanır; Instagram erişimi ve kalan iş miktarı nedeniyle tek istekte tamamlanma garantisi yoktur.
+
+Artık görünmeyen yorumlar kesin olarak “silindi” diye adlandırılmaz. Metin farkı, düzenleme veya ek yorum nedeniyle oluşabilir. Yeni rapor yalnız ulaşılabilen veriye dayanır.
+
+### Tarayıcı testleri
+
+İsteğe bağlı test ortamında Python Playwright ve Chrome gerekir. Üretim bağımlılığı değildir. İlk terminalde `python tests/browser/server.py`; ikinci terminalde `python tests/browser/layout.py` ve `python tests/browser/interactions.py` çalıştırın. Sunucu yalnız `127.0.0.1:5087` üzerinde geçici örnek veritabanı kullanır. Instagram çağrısı yapan toplu analiz adımları tarayıcı testinde kontrollü yanıtlarla sınanır; gerçek hesap üzerinde yük testi yapılmaz.
+
+Ayrıntılı kapsam ve kanıtlar: [Özellik doğrulama kaydı](FEATURE_VALIDATION.md).

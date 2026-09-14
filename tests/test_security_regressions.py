@@ -83,9 +83,11 @@ class SecurityTests(unittest.TestCase):
                     stack.enter_context(patch.object(instagram, "get_post_details_async", new=AsyncMock(return_value={})))
                     stack.enter_context(patch.object(instagram, "fetch_comment_usernames_async", new=AsyncMock(return_value={"ok": False, "status": status, "comments": []})))
                     stack.enter_context(patch.object(instagram, "fetch_liker_usernames_async", new=AsyncMock(return_value={"ok": False, "status": status, "usernames": set()})))
-                    with self.assertRaises(main.ControlUnavailable):
-                        main.run_manual_control("https://www.instagram.com/p/ABC123/", "alice bob", "", [], likes)
-                    audit.assert_not_called()
+                    result = main.run_manual_control("https://www.instagram.com/p/ABC123/", "alice bob", "", [], likes)
+                    self.assertTrue(result['links'][0]['error'])
+                    self.assertEqual(result['links'][0]['eksikler'], [])
+                    self.assertEqual(result['all_commented'], [])
+                    self.assertEqual(audit.call_args.kwargs['action'], 'kontrol_dogrulanamadi')
 
     def test_successful_comments_still_classify_members(self):
         with ExitStack() as stack:
@@ -121,8 +123,10 @@ class SecurityTests(unittest.TestCase):
             stack.enter_context(patch.object(main, "get_media_taken_at", return_value=(None, None)))
             stack.enter_context(patch.object(main, "get_post_details", return_value={}))
             stack.enter_context(patch.object(main, "fetch_comments_with_failover", return_value={"ok": False, "comments": []}))
-            with self.assertRaises(main.ControlUnavailable):
-                main.run_manual_control("https://www.instagram.com/p/ABC123/", "alice", "", [], False)
+            result = main.run_manual_control("https://www.instagram.com/p/ABC123/", "alice", "", [], False)
+            self.assertTrue(result['links'][0]['error'])
+            self.assertEqual(result['user_missing_posts'], {})
+            self.assertEqual(result['all_commented'], [])
 
     def test_exhausted_failover_remains_failure(self):
         token = {"token": "fake", "username": "test"}

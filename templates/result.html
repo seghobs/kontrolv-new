@@ -764,6 +764,7 @@
             });
         });
     </script>
+{% if post_code and not is_loading %}<nav class="action-buttons"><a class="btn" href="/followup/{{ post_code }}">Takip, analiz ve Excel</a></nav>{% endif %}
 </body>
 
 </html>

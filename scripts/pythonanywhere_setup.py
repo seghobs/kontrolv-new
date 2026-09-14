@@ -202,6 +202,25 @@ def ensure_project(project, backup=None):
         return sorted(incoming)
 
 
+def schema_preview(project, database):
+    schema_file=project/'app_core'/'sqlite_schema.py'
+    if not schema_file.exists():return ['Şema önizlemesi güncel kod indirildiğinde hazırlanacak.']
+    tree=ast.parse(schema_file.read_text(encoding='utf-8-sig'))
+    definition=next(node.value for node in tree.body if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='STATEMENTS' for t in node.targets))
+    statements=ast.literal_eval(definition)
+    with closing(sqlite3.connect(':memory:')) as expected:
+        for sql in statements:expected.execute(sql)
+        actual=sqlite3.connect(database.as_uri()+'?mode=ro',uri=True) if database.exists() else sqlite3.connect(':memory:')
+        with closing(actual):
+            additions=[]
+            for (table,) in expected.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"):
+                old={row[1] for row in actual.execute(f'PRAGMA table_info("{table}")')}
+                if not old:additions.append('Yeni tablo: '+table)
+                else:
+                    additions.extend('Yeni sütun: '+table+'.'+row[1] for row in expected.execute(f'PRAGMA table_info("{table}")') if row[1] not in old)
+            return additions or ['Tablo ve sütunlar güncel.']
+
+
 def make_wsgi(project, database, previous):
     env = {'APP_ENV':'prod','APP_DB_BACKEND':'sqlite','APP_DB_FILE':str(database),'SQLITE_JOURNAL_MODE':'DELETE'}
     env.update({k:v for k,v in previous.items() if k in ('ADMIN_PASSWORD','SECRET_KEY')})
@@ -231,7 +250,7 @@ def prepare_runtime(project, executable, version, database, previous):
         path.chmod(0o600)
     env = {**os.environ, **previous, 'APP_DB_FILE':str(database),'APP_DB_BACKEND':'sqlite',
            'APP_ENV':'prod','SQLITE_JOURNAL_MODE':'DELETE'}
-    command([python,'-c','from flask_app import app; r=app.test_client().get("/"); assert r.status_code==200, r.status_code; print("Uygulama açılış kontrolü başarılı.")'], cwd=project, env=env)
+    command([python,'-c','from flask_app import app; from app_core.healthcheck import verify; print(verify(app))'], cwd=project, env=env)
     database.chmod(0o600)
     return environment
 
@@ -332,7 +351,9 @@ def main(argv=None):
     if not executable:
         raise SetupError(f'Python {version} bu sistemde bulunamadı.')
     print(f'Hesap: {username} | Python: {version}\nProje: {project}\nSQLite: {database}',flush=True)
+    print('Güncellenecek sürüm: GitHub main. Eksik SQLite sütunları ve tabloları yerinde eklenecek. Yedekler: ~/.kontrol-backups/',flush=True)
     if args.check:
+        print('\n'.join(schema_preview(project,database)))
         print('Ön kontrol başarılı. Hiçbir dosya veya web ayarı değiştirilmedi.')
         return
     import fcntl
@@ -352,6 +373,7 @@ def main(argv=None):
         print(f'Yedek hazır: {backup}',flush=True)
         managed_files = ensure_project(project, backup)
         try:
+            print('\n'.join(schema_preview(project,database)),flush=True)
             environment = prepare_runtime(project,executable,version,database,previous)
             configure(api,project,domain,version,environment,wsgi_path,backup,existing,{**previous,'APP_DB_FILE':str(database)})
         except BaseException:

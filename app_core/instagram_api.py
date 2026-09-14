@@ -751,6 +751,7 @@ def fetch_group_members(token_record, thread_id):
                 usernames.append(uname)
                 members.append({
                     "username": uname,
+                    "id": user_id,
                     "profile_pic_url": pic_url,
                     "full_name": fname
                 })
@@ -977,6 +978,7 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
                 "id": media.get("id"),
                 "code": code,
                 "url": f"https://www.instagram.com/p/{code}/",
+                "shared_at": datetime.datetime.utcfromtimestamp(timestamp_sec).isoformat() + "Z",
                 "date": date,
                 "username": sender_username,
                 "like_count": like_count,
@@ -1036,6 +1038,7 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
                         "id": media_id,
                         "code": code,
                         "url": f"https://www.instagram.com/p/{code}/",
+                "shared_at": datetime.datetime.utcfromtimestamp(timestamp_sec).isoformat() + "Z",
                         "date": f"({dt.day} {turkish_months[dt.month]} Yüklendi) {dt.day} {turkish_months[dt.month]} {dt.strftime('%H:%M')}",
                         "username": tp["sender_username"],
                         "like_count": -1,
