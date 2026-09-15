@@ -609,8 +609,16 @@ def result_page_new(post_code):
         except Exception:
             return redirect("/")
             
+        from app_core.preset_reports import reports, missing_text
+        full_result = result
+        copy_reports = {mode: missing_text(report) for mode, report in reports(result).items()}
+        if result.get('dual_check'):
+            result = result['like_report'] if request.args.get('mode') == 'likes' else result['comment_report']
         return render_template(
             "result.html",
+            dual_check=full_result.get('dual_check', False),
+            copy_reports=copy_reports,
+            added_posts=full_result.get('added_posts'),
             links=result.get("links"),
             all_commented=result.get("all_commented"),
             group=result.get("group"),
@@ -674,6 +682,13 @@ def recheck_post(post_code):
         return jsonify({"success": False, "message": "Denetim zaten sırada veya çalışıyor."}), 409
     if source and source['kind'] not in ('manual','preset'):
         return jsonify({"success": False, "message": "Otomasyonu yönetim panelinden yeniden başlatın."}), 400
+    if source and (source['result'] or {}).get('dual_check'):
+        prior = source['result']
+        payload = {**prior.get('report_scope', {}), 'thread_id':prior.get('thread_id'),
+                   '_operation':'refresh', '_source_id':post_code, 'only_missing':bool(data.get('only_missing')), 'unknown_only':bool(data.get('unknown_only'))}
+        from app_core.preset_reports import enqueue_active
+        job_id = enqueue_active(payload, post_code, 'dual-refresh:'+post_code+':'+str(payload['only_missing'])+':'+str(payload['unknown_only']))
+        return jsonify(success=True, result_url='/result/'+job_id)
     inputs = json.loads(inputs_json)
     if source and source['kind']=='preset':
         result=source['result'] or {}

@@ -30,4 +30,14 @@ def login():
  from flask import session,redirect
  session['admin_logged_in']=True
  return redirect('/group-rules')
+# Multi-mode report fixture: all interactions remain local.
+from app_core.preset_reports import combine
+storage.cache_group_names([{'id':'g','name':'Örnek grup'}])
+followup.write('preset_browser',dict(name='Günlük çift kontrol',thread_id='g',check_likes=False,dual_check=True,low_likes=False,only_sharers=False))
+comment_report=dict(thread_id='g',group=['alice','bob','charlie'],check_likes=False,links=[dict(post_link='https://www.instagram.com/p/ABC/',sender='ornekhesap',checked_at=1700000000,eksikler=['bob'],commenters=['alice'],unknown_members=['charlie'],comments_list=[dict(username='alice',text='Çok güzel bir paylaşım 🌸')])],user_comments={'alice':['Çok güzel bir paylaşım 🌸']},user_missing_posts={'bob':['https://www.instagram.com/p/ABC/']},all_commented=['alice'])
+like_report={**comment_report,'check_likes':True,'links':[{**comment_report['links'][0],'eksikler':['alice'],'commenters':['bob'],'comments_list':[]}],'user_comments':{},'user_missing_posts':{'alice':['https://www.instagram.com/p/ABC/']},'all_commented':['bob']}
+dual_id='c'*32
+jobs.enqueue('preset',dict(thread_id='g',date='2026-09-14',dual_check=True),job_id=dual_id)
+jobs.claim_request(dual_id,'fixture')
+jobs.complete(dual_id,'fixture',combine({'comments':comment_report,'likes':like_report},dict(thread_id='g',date='2026-09-14')))
 app.run(host='127.0.0.1',port=5087,debug=False)

@@ -106,20 +106,5 @@ def group_summary():
 
 
 def run_preset(payload, progress_callback):
-    from app_core.token_service import fetch_group_members_with_failover,fetch_group_media_with_failover
-    from app_core.routes.main import run_manual_control
-    tid=payload['thread_id']
-    progress_callback(0,1,'Şablon için güncel grup bilgileri alınıyor…')
-    members=fetch_group_members_with_failover(tid)
-    if not members.get('ok'):raise RuntimeError('Grup üyeleri alınamadı; şablon başlatılamadı.')
-    media=fetch_group_media_with_failover(tid,datetime.strptime(payload['date'],'%Y-%m-%d'))
-    if not media.get('ok'):raise RuntimeError('Paylaşımlar alınamadı; şablon başlatılamadı.')
-    posts=media.get('posts') or []
-    if payload.get('low_likes'):posts=[p for p in posts if isinstance(p.get('like_count'),(int,float)) and 0<=p['like_count']<=90]
-    if not posts:raise RuntimeError('Bu gün ve filtreler için paylaşım bulunamadı.')
-    users={m['username'] for m in members.get('members',[]) if m.get('username')}
-    if payload.get('only_sharers'):users &= {p.get('username') for p in posts}
-    if not users:raise RuntimeError('Kontrol edilecek üye bulunamadı.')
-    return run_manual_control('\n'.join(p['url'] for p in posts),' '.join(users),tid,
-                              [p['url']+'|'+p['username'] for p in posts if p.get('username')],
-                              payload['check_likes'],progress_callback=progress_callback,shared_dates={p['url']:p['shared_at'] for p in posts if p.get('shared_at')})
+    from app_core.preset_reports import execute
+    return execute(payload, progress_callback)

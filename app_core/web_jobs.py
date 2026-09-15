@@ -49,6 +49,8 @@ def execute_claimed(job):
                 write(checkpoint_key, checkpoints)
             payload['save_checkpoint'] = checkpoint
             result = run_manual_control(**payload)
+            if parent and (parent['result'] or {}).get('report_scope'):
+                result['report_scope'] = parent['result']['report_scope']
         elif job['kind'] == 'member':
             from app_core.member_analysis import run
             from app_core.followup import read, write
@@ -60,6 +62,10 @@ def execute_claimed(job):
             result = run(payload, progress)
         elif job['kind'] == 'preset':
             from app_core.features import run_preset
+            payload['_job_id'] = job_id
+            if job['parent_id']:
+                parent = jobs.get_job(job['parent_id'])
+                if parent and parent['state'] == 'failed': payload['_retry_parent'] = parent['id']
             result = run_preset(payload, progress)
         else:
             from app_core.automation import run_automation_for_thread

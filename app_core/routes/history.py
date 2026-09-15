@@ -97,8 +97,8 @@ def save_preset():
     from app_core.storage import load_group_names,add_audit_log
     name=request.form.get('name','').strip()
     tid=request.form.get('thread_id','').strip()
-    if not name or len(name)>80 or tid not in load_group_names():abort(400)
-    value=dict(name=name,thread_id=tid,check_likes=request.form.get('kind')=='likes',
+    if not name or len(name)>80 or tid not in load_group_names() or request.form.get('kind') not in ('comments','likes','both'):abort(400)
+    value=dict(name=name,thread_id=tid,check_likes=request.form.get('kind')=='likes',dual_check=request.form.get('kind')=='both',
                low_likes=request.form.get('low_likes')=='on',only_sharers=request.form.get('only_sharers')=='on')
     with jobs.transaction() as conn:
         conn.execute('INSERT INTO key_value(key,value) VALUES (?,?)',('preset_'+uuid.uuid4().hex,json.dumps(value)))
@@ -113,10 +113,10 @@ def start_preset(identifier):
         row=conn.execute('SELECT value FROM key_value WHERE key=?',('preset_'+identifier,)).fetchone()
     if not row:abort(404)
     payload=json.loads(row['value'])
-    payload['date']=datetime.now(pytz.timezone('Europe/Istanbul')).strftime('%Y-%m-%d')
+    payload['date']=validated_date(request.form.get('date'))
     # Repeated clicks reuse the in-progress run; completed checks can be run again.
     with jobs.transaction() as conn:
-        active=conn.execute("SELECT id FROM jobs WHERE kind='preset' AND state IN ('queued','running','cancelling') AND json_extract(payload,'$.preset_id')=?",(identifier,)).fetchone()
+        active=conn.execute("SELECT id FROM jobs WHERE kind='preset' AND state IN ('queued','running','cancelling') AND json_extract(payload,'$.preset_id')=? AND json_extract(payload,'$.date')=?",(identifier,payload['date'])).fetchone()
         if active:return redirect(url_for('main.result_page_new',post_code=active['id']))
         import time,uuid
         job_id=uuid.uuid4().hex;now=time.time();payload['preset_id']=identifier
@@ -141,3 +141,52 @@ def delete_preset(identifier):
     from app_core.storage import add_audit_log
     add_audit_log('şablon',identifier,'Denetim şablonu silindi','Yönetici oturumu')
     return redirect(url_for('history.tools_page'))
+
+
+def validated_date(value):
+    today = datetime.now(pytz.timezone('Europe/Istanbul')).date()
+    if not value: return today.isoformat()
+    try: selected = datetime.strptime(value, '%Y-%m-%d').date()
+    except (ValueError, TypeError): abort(400, 'Geçerli bir tarih seçin.')
+    if selected > today: abort(400, 'Gelecek bir tarih seçilemez.')
+    return selected.isoformat()
+
+
+@history_bp.route('/tools/presets/<identifier>/edit', methods=['GET','POST'])
+def edit_preset(identifier):
+    import json
+    from app_core.storage import load_group_names
+    from app_core.followup import read, write
+    item = read('preset_' + identifier)
+    if item is None: abort(404)
+    groups = load_group_names()
+    if request.method == 'POST':
+        name = request.form.get('name','').strip(); tid = request.form.get('thread_id','')
+        kind = request.form.get('kind','')
+        if not name or len(name)>80 or tid not in groups or kind not in ('comments','likes','both'): abort(400)
+        write('preset_' + identifier, {**item, 'name':name, 'thread_id':tid, 'check_likes':kind=='likes', 'dual_check':kind=='both',
+            'only_sharers':request.form.get('only_sharers')=='on', 'low_likes':request.form.get('low_likes')=='on'})
+        return redirect('/tools#presets')
+    return render_template('preset_edit.html', item=item, groups=groups)
+
+
+@history_bp.route('/reports/<identifier>/matrix')
+def report_matrix(identifier):
+    from app_core.preset_reports import matrix
+    job=jobs.get_job(identifier)
+    if not job or job['state']!='completed' or job['kind']=='member': abort(404)
+    posts, rows=matrix(job['result'] or {})
+    return render_template('report_matrix.html', job=job, posts=posts, rows=rows)
+
+
+@history_bp.route('/api/reports/<identifier>/extend', methods=['POST'])
+def extend_report(identifier):
+    job=jobs.get_job(identifier)
+    if not job or job['state']!='completed' or job['kind'] not in ('manual','preset'): abort(404)
+    data=job['result'] or {}; tid=data.get('thread_id')
+    if not tid: abort(400, 'Yeni paylaşımlar için rapor bir gruba bağlı olmalı.')
+    value=request.get_json(silent=True) or {}
+    payload={**data.get('report_scope',{}), 'thread_id':tid,'date':validated_date(value.get('date')), '_operation':'extend','_source_id':identifier}
+    from app_core.preset_reports import enqueue_active
+    job_id=enqueue_active(payload,identifier,'extend:'+identifier+':'+payload['date'])
+    return jsonify(success=True,result_url='/result/'+job_id)

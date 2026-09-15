@@ -1,0 +1,14 @@
+{% extends 'followup_base.html' %}
+{% block title %}Şablonu düzenle{% endblock %}
+{% block body %}
+<link rel="stylesheet" href="{{ url_for('static',filename='css/preset_reports.css') }}">
+<header class="preset-hero"><span class="preset-kicker">DENETİM ŞABLONLARI</span><h1>Rutinini düzenle</h1><p>Şablonun kimliği ve önceki denetimlerin korunur.</p></header>
+<form method="post" class="preset-edit">
+<label>Şablon adı<input name="name" required maxlength="80" value="{{ item.name }}"></label>
+<label>Instagram grubu<select name="thread_id" required>{% for id,name in groups.items() %}<option value="{{ id }}" {{ 'selected' if id==item.thread_id else '' }}>{{ name }}</option>{% endfor %}</select></label>
+<label>Kontrol türü<select name="kind"><option value="both" {{ 'selected' if item.dual_check else '' }}>Yorum + Beğeni</option><option value="comments" {{ 'selected' if not item.dual_check and not item.check_likes else '' }}>Yorum</option><option value="likes" {{ 'selected' if not item.dual_check and item.check_likes else '' }}>Beğeni</option></select></label>
+<label class="preset-check"><input type="checkbox" name="low_likes" {{ 'checked' if item.low_likes else '' }}> Yalnızca 90 ve altı beğenili paylaşımlar</label>
+<label class="preset-check"><input type="checkbox" name="only_sharers" {{ 'checked' if item.only_sharers else '' }}> Yalnızca paylaşım yapan üyeler</label>
+<div class="preset-actions"><a href="/tools#presets">Vazgeç</a><button class="preset-primary">Değişiklikleri kaydet</button></div>
+</form>
+{% endblock %}

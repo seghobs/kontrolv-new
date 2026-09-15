@@ -1,0 +1,16 @@
+{% extends 'followup_base.html' %}
+{% block title %}Üye–paylaşım karşılaştırması{% endblock %}
+{% block body %}
+<link rel="stylesheet" href="{{ url_for('static',filename='css/preset_reports.css') }}">
+<header class="preset-hero"><span class="preset-kicker">GRUP KATILIMI</span><h1>Üye–paylaşım karşılaştırması</h1><p>{{ rows|length }} üye · {{ posts|length }} paylaşım. Her hücre yorum ve beğeniyi ayrı gösterir.</p><a class="matrix-back" href="/result/{{ job.id }}">← Rapora dön</a></header>
+<div class="matrix-toolbar"><label>Üye ara<input data-matrix-search type="search" placeholder="Kullanıcı adı…"></label><label class="preset-check"><input data-matrix-missing type="checkbox"> Yalnızca eksiği olanlar</label></div>
+<div class="matrix-legend">✓ Tamamlandı <span>− Eksik</span><span>? Doğrulanamadı</span><span>○ Muaf</span><span>· Kontrol edilmedi</span></div>
+<div class="matrix-scroll" tabindex="0" role="region" aria-label="Yatay kaydırılabilir katılım tablosu">
+<table class="participation-matrix"><thead><tr><th scope="col">Üye</th>{% for post in posts %}<th scope="col"><a href="{{ post.post_link }}" target="_blank" rel="noopener">{{ loop.index }} · {{ '@' ~ post.sender if post.sender else 'Paylaşım' }} ↗</a>{% for mode,checked in post.mode_times.items() %}<small>{{ 'Yorum' if mode=='comments' else 'Beğeni' }}: <span data-matrix-time="{{ checked }}"></span></small>{% endfor %}</th>{% endfor %}</tr></thead><tbody>
+{% set labels={'present':'Tamamlandı','missing':'Eksik','unknown':'Doğrulanamadı','excluded':'Muaf','unchecked':'Kontrol edilmedi'} %}
+{% set icons={'present':'✓','missing':'−','unknown':'?','excluded':'○','unchecked':'·'} %}
+{% for row in rows %}<tr data-matrix-user="{{ row.username }}" data-has-missing="{{ 'yes' if row.cells|selectattr('comments','equalto','missing')|list or row.cells|selectattr('likes','equalto','missing')|list else 'no' }}"><th scope="row">@{{ row.username }}</th>{% for cell in row.cells %}<td>{% for kind,label in [('comments','Yorum'),('likes','Beğeni')] %}<span class="matrix-status state-{{ cell[kind] }}" title="{{ label }}: {{ labels[cell[kind]] }}">{{ icons[cell[kind]] }} {{ label }}<small>{{ labels[cell[kind]] }}</small></span>{% endfor %}</td>{% endfor %}</tr>{% endfor %}
+</tbody></table></div><p data-matrix-empty hidden>Bu filtreye uygun üye bulunamadı.</p>
+<p class="matrix-note">Kontrol edilmeyen veya doğrulanamayan durumlar eksik sayılmaz. Her sütun kayıtlı raporun kontrol zamanını gösterir.</p>
+<script src="{{ url_for('static',filename='js/preset_reports.js') }}"></script>
+{% endblock %}

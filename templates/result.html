@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-nav.css') }}">
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/result_report.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/preset_reports.css') }}">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
         const originalFetch = window.fetch;
@@ -101,7 +102,17 @@
                         </div>
                     </div>
 
-                    <!-- Anlık Paylaşım Değiştirici (Animasyonlu Kart) -->
+                    {% if links and post_code %}
+                    <nav class="dual-report-nav" aria-label="Rapor görünümleri">
+                        {% if dual_check %}<a href="?mode=comments" {{ 'aria-current=page' if not check_likes else '' }}><i class="far fa-comment"></i> Yorum sonuçları</a><a href="?mode=likes" {{ 'aria-current=page' if check_likes else '' }}><i class="far fa-heart"></i> Beğeni sonuçları</a>
+                        <button type="button" data-report-copy="comments">Yorum eksiklerini kopyala</button><button type="button" data-report-copy="likes">Beğeni eksiklerini kopyala</button>
+                        <script type="application/json" id="report-copy-data">{{ copy_reports|tojson }}</script>{% endif %}
+                        <a href="/reports/{{ post_code }}/matrix"><i class="fas fa-table-cells"></i> Üye–paylaşım tablosu</a>
+                        {% if thread_id %}<button type="button" data-extend="/api/reports/{{ post_code }}/extend"><i class="fas fa-plus"></i> Yeni paylaşımları ekle</button>{% endif %}
+                    </nav>
+                    {% if added_posts is not none and added_posts is defined %}<p class="report-description">{{ added_posts }} yeni paylaşım eklendi. Önceki rapor ve sonuçları korundu.</p>{% endif %}
+                    {% endif %}
+                                        <!-- Anlık Paylaşım Değiştirici (Animasyonlu Kart) -->
                     <div id="resultPostSelectorContainer" style="display: none;" class="mb-4">
                         <div class="sortable-main-card">
                             <div class="eksikler-section-header" onclick="togglePostSelectorCard()">
@@ -776,6 +787,6 @@
     </script>
 
     {% include "_select_modal.html" %}
-</body>
+<script src="{{ url_for('static',filename='js/preset_reports.js') }}"></script></body>
 
 </html>
