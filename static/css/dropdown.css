@@ -139,3 +139,21 @@
     font-size: 12px;
 }
 
+
+/* The same group list is promoted to the top layer; only its options scroll. */
+#groupDropdown .group-picker-floating:popover-open {
+    position:fixed!important; inset:auto; margin:0; right:auto; bottom:auto;
+    display:flex!important; flex-direction:column; transform:none!important;
+    transition:none; box-sizing:border-box; overflow:hidden;
+    background:#1b150f; border:1px solid #c4956a55;
+}
+#groupDropdown .group-picker-floating > .dropdown-search,
+#groupDropdown .group-picker-floating > .dropdown-search-wrapper {flex-shrink:0}
+#groupDropdown .group-picker-floating .dropdown-options {
+    flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto;
+    overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
+    padding-bottom:12px; scroll-padding-bottom:12px;
+}
+#groupDropdown .group-picker-floating::backdrop {background:transparent;pointer-events:none}
+#groupDropdown .group-picker-floating:not(:popover-open) {display:none!important}
+.custom-dropdown > .dropdown-menu:not(.show) {display:none!important}

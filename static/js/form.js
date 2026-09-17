@@ -1384,7 +1384,7 @@ function filterDropdown(dropdownId, searchTerm) {
     
     options.forEach(opt => {
         const text = opt.textContent.toLowerCase();
-        opt.style.display = text.includes(searchTerm) ? 'flex' : 'none';
+        opt.style.setProperty('display', text.includes(searchTerm) ? 'flex' : 'none', 'important');
     });
 }
 
@@ -1785,3 +1785,57 @@ function saveGroupControlPreferences() {
     groupPreferenceWrites.set(groupId, pending);
     pending.catch(() => showValidationToast('Grup tercihleri kaydedilemedi. Seçeneği tekrar değiştirerek deneyin.'));
 }
+
+
+// Keep the existing group picker above page layers and inside the usable viewport.
+document.addEventListener('DOMContentLoaded', () => {
+    const dropdown = document.getElementById('groupDropdown');
+    const menu = dropdown?.querySelector('.dropdown-menu');
+    const trigger = dropdown?.querySelector('.dropdown-trigger');
+    if (!menu || !trigger || typeof menu.showPopover !== 'function') return;
+    menu.setAttribute('popover', 'manual');
+    menu.classList.add('group-picker-floating');
+    function position() {
+        if (!menu.matches(':popover-open')) return;
+        const viewport = window.visualViewport;
+        const top = (viewport?.offsetTop || 0) + 12;
+        const left = (viewport?.offsetLeft || 0) + 12;
+        const width = (viewport?.width || innerWidth) - 24;
+        let bottom = top + (viewport?.height || innerHeight) - 24;
+        const nav = document.querySelector('.mobile-bottom-nav');
+        if (nav && getComputedStyle(nav).display !== 'none') {
+            const navRect = nav.getBoundingClientRect();
+            if (navRect.top > top && navRect.top < bottom) bottom = navRect.top - 8;
+        }
+        const anchor = trigger.getBoundingClientRect();
+        const below = Math.max(0, bottom - anchor.bottom - 8);
+        const above = Math.max(0, anchor.top - top - 8);
+        const openAbove = below < 240 && above > below;
+        const height = Math.min(360, Math.max(0, bottom - top), openAbove ? above : below);
+        menu.style.width = Math.min(anchor.width, width) + 'px';
+        menu.style.maxHeight = height + 'px';
+        menu.style.left = Math.max(left, Math.min(anchor.left, left + width - Math.min(anchor.width, width))) + 'px';
+        const actualHeight = Math.min(menu.scrollHeight, height);
+        menu.style.top = Math.max(top, Math.min(openAbove ? anchor.top - 8 - actualHeight : anchor.bottom + 8, bottom - actualHeight)) + 'px';
+    }
+    new MutationObserver(() => {
+        if (menu.classList.contains('show')) {
+            if (!menu.matches(':popover-open')) menu.showPopover();
+            position();
+            trigger.setAttribute('aria-expanded', 'true');
+        } else {
+            if (menu.matches(':popover-open')) menu.hidePopover();
+            trigger.setAttribute('aria-expanded', 'false');
+        }
+    }).observe(menu, {attributes:true, attributeFilter:['class']});
+    new ResizeObserver(position).observe(menu.querySelector('.dropdown-options'));
+    window.addEventListener('resize', position);
+    window.addEventListener('scroll', position, true);
+    window.visualViewport?.addEventListener('resize', position);
+    window.visualViewport?.addEventListener('scroll', position);
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && menu.matches(':popover-open')) {
+            menu.classList.remove('show'); trigger.classList.remove('active'); trigger.focus();
+        }
+    });
+});
