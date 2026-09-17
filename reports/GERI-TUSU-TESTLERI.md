@@ -10,3 +10,12 @@ Doğrulama:
 - Şablon/katılım tablosu tarayıcı regresyon testleri geçti.
 
 Canlı dosyalar yedeklendi ve yükleme doğrulandı. GitHub ve canlı sürüm güncellendi. Veritabanı ve 18092026.zip değiştirilmedi.
+
+
+## Önbellek regresyonu
+
+İlk düzeltmeden sonra kullanıcıdaki eski `result_polling.js?v=web-execution-1` dosyasının bir saatlik HTTP önbelleğinde kalabildiği görüldü. Form ve sonuç şablonlarındaki sabit sürüm kaldırıldı; mevcut içerik hash mekanizması bu dosyada da kullanılıyor.
+
+`tests/browser/back_navigation_cache.py` gerçek HTTP önbelleği açıkken (Playwright routing kullanılmadan) eski sabit URL ile hatayı yeniden üretti. Aynı tarayıcı bağlamında içerik hash adresine geçilince eski önbellek temizlenmeden geri dönüş ve yeni kontrol geçti. 179 backend testi ve önceki navigasyon senaryoları tekrar geçti.
+
+Canlıda iki şablonun dosya hash'i doğrulandı. Kullanıcının 414ba2c129ee40f295d1e12591406cf9 kaydının gerçek durum/sonuç yanıtlarıyla geri dönüş ve yenileme doğrulandı; yalnız yeni denetim oluşturacak POST yanıtı tarayıcıda değiştirildi. Veritabanına yeni denetim yazılmadı.
