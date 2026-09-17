@@ -1696,3 +1696,24 @@ function viewCachedResult() {
 window.closeAutoRunModal = closeAutoRunModal;
 window.viewCachedResult = viewCachedResult;
 
+
+
+// Back/Forward must reopen a new control, not the browser-restored draft.
+window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+        // A BFCache snapshot also retains group data, callbacks and filter state.
+        // Load a clean document so none of those can repopulate the new form.
+        window.location.replace(window.location.pathname);
+        return;
+    }
+    if (performance.getEntriesByType('navigation')[0]?.type !== 'back_forward') return;
+    // Browsers restore native field values after pageshow; clear them afterwards.
+    setTimeout(() => {
+        const form = document.getElementById('checkForm');
+        if (!form) return;
+        form.reset();
+        form.querySelectorAll('details').forEach(section => { section.open = false; });
+        renderUserTags();
+        validateForm();
+    }, 0);
+});

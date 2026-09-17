@@ -19,3 +19,10 @@ Canlı dosyalar yedeklendi ve yükleme doğrulandı. GitHub ve canlı sürüm g�
 `tests/browser/back_navigation_cache.py` gerçek HTTP önbelleği açıkken (Playwright routing kullanılmadan) eski sabit URL ile hatayı yeniden üretti. Aynı tarayıcı bağlamında içerik hash adresine geçilince eski önbellek temizlenmeden geri dönüş ve yeni kontrol geçti. 179 backend testi ve önceki navigasyon senaryoları tekrar geçti.
 
 Canlıda iki şablonun dosya hash'i doğrulandı. Kullanıcının 414ba2c129ee40f295d1e12591406cf9 kaydının gerçek durum/sonuç yanıtlarıyla geri dönüş ve yenileme doğrulandı; yalnız yeni denetim oluşturacak POST yanıtı tarayıcıda değiştirildi. Veritabanına yeni denetim yazılmadı.
+
+
+## Geri dönünce boş form
+
+Ana sayfaya tarayıcı geçmişinden dönüldüğünde yerel alanlar sayfa gösteriminden sonra sıfırlanır; üye etiketleri ve doğrulama görünümü yenilenir, açılır bölümler kapanır. BFCache geri yüklemesinde eski JavaScript/grup/filtre durumunun taşınmaması için temiz belge açılır. Form betiği de sabit sürüm yerine içerik hash'i kullanır.
+
+179 backend testi geçti. Navigasyon testinde önceden doldurulmuş tekli/toplu bağlantılar, üyeler ve seçili iki filtrenin geri dönüşte boş/sıfırlanmış olduğu doğrulandı. BFCache pageshow dalı, eski grup belleğini temizleme ve yeni denetim senaryoları geçti. Canlı rapordan geri dönüşte bağlantı, üyeler ve etiketlerin boş olduğu ayrıca doğrulandı; yeni denetim oluşturulmadı.
