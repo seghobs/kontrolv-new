@@ -216,7 +216,7 @@ function loadGroups() {
                         <span style="flex-grow: 1; font-weight: 500;">${g.name} <span style="opacity: 0.6; font-size: 11px;">(${g.member_count})</span></span>
                         <i class="fas fa-star fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite(event, '${g.id}')"></i>
                     `;
-                    div.onclick = function(e) {
+                    div.onclick = async function(e) {
                         e.stopPropagation();
                         const textSpan = document.querySelector('#groupDropdown .dropdown-text');
                         if (g.group_pic_url) {
@@ -254,6 +254,7 @@ function loadGroups() {
                         }
                         
                         // Load members when group is selected - pass threadId directly
+                        if (!await restoreGroupControlPreferences(g.id)) return;
                         loadGroupMembers(g.id);
                         
                         // Update the badge
@@ -320,6 +321,7 @@ function loadGroupMembers(threadIdFromDropdown) {
     fetch("/api/get_group_members/" + threadId)
         .then(r => r.json())
         .then(data => {
+            if (currentThreadId && currentThreadId !== threadId) return;
             if (hiddenSelect) {
                 hiddenSelect.disabled = false;
             }
@@ -355,6 +357,7 @@ function loadGroupMembers(threadIdFromDropdown) {
             }
         })
         .catch(err => {
+            if (currentThreadId && currentThreadId !== threadId) return;
             if (hiddenSelect) {
                 hiddenSelect.disabled = false;
             }
@@ -367,6 +370,7 @@ function loadGroupMembers(threadIdFromDropdown) {
 
         })
         .finally(() => {
+            if (currentThreadId && currentThreadId !== threadId) return;
             window.isMembersLoading = false;
             checkAndEnableToggles();
         });
@@ -715,6 +719,7 @@ function loadGroupPosts(threadIdFromMembers) {
     fetch("/api/get_group_posts/" + threadId + "?date=" + dateFilter)
         .then(r => r.json())
         .then(data => {
+            if (currentThreadId && currentThreadId !== threadId) return;
             if (dropdownText) {
                 dropdownText.textContent = "-- Paylaşım Seç --";
             }
@@ -758,12 +763,14 @@ function loadGroupPosts(threadIdFromMembers) {
             }
         })
         .catch(err => {
+            if (currentThreadId && currentThreadId !== threadId) return;
             if (dropdownText) {
                 dropdownText.textContent = "-- Paylaşım Seç --";
             }
             dropdownOptions.innerHTML = '<div class="dropdown-option" style="color: rgba(255,255,255,0.5);">Hata oluştu</div>';
         })
         .finally(() => {
+            if (currentThreadId && currentThreadId !== threadId) return;
             window.isPostsLoading = false;
             checkAndEnableToggles();
         });
@@ -792,6 +799,7 @@ function checkAndEnableToggles() {
 }
 
 function handleLowLikesCheckbox() {
+    saveGroupControlPreferences();
     renderPosts();
 }
 
@@ -1461,6 +1469,7 @@ function fetchSharers(silent = false) {
 }
 
 function handleSharersCheckbox() {
+    saveGroupControlPreferences();
     const isChecked = document.getElementById("onlySharersCheck")?.checked;
     if (isChecked) {
         fetchSharers();
@@ -1727,3 +1736,52 @@ window.addEventListener('pageshow', (event) => {
         validateForm();
     }, 0);
 });
+
+
+const groupPreferenceWrites = new Map();
+let groupPreferenceLoad = 0;
+async function restoreGroupControlPreferences(groupId) {
+    const load = ++groupPreferenceLoad;
+    const sharers = document.getElementById('onlySharersCheck');
+    const likes = document.getElementById('lowLikesCheck');
+    window.fullGroupMembers = [];
+    window.allFetchedPosts = [];
+    document.getElementById('groupPostsSection').style.display = 'none';
+    document.getElementById('postSelect').innerHTML = '<option value="">-- Paylaşım Seç --</option>';
+    document.querySelector('#postDropdown .dropdown-options').replaceChildren();
+    document.querySelectorAll('.post-sender-input').forEach(input => input.remove());
+    document.getElementById('selectedGroupBadge').style.display = 'none';
+    for (const id of ['post_link_single','post_link_multi','grup_uye']) document.getElementById(id).value = '';
+    renderUserTags();
+    sharers.checked = likes.checked = false;
+    sharers.disabled = likes.disabled = true;
+    try {
+        await groupPreferenceWrites.get(groupId);
+        const response = await fetch('/api/group_control_preferences/' + encodeURIComponent(groupId), {cache:'no-store'});
+        const data = await response.json();
+        if (load !== groupPreferenceLoad || currentThreadId !== groupId) return false;
+        if (!response.ok || !data.ok) throw new Error(data.error || 'Grup tercihleri yüklenemedi.');
+        sharers.checked = data.preferences.only_sharers === true;
+        likes.checked = data.preferences.low_likes === true;
+        return true;
+    } catch (error) {
+        if (load === groupPreferenceLoad) showValidationToast(error.message || 'Grup tercihleri yüklenemedi. Grubu tekrar seçin.');
+        return false;
+    }
+}
+function saveGroupControlPreferences() {
+    const groupId = currentThreadId;
+    if (!groupId) return;
+    const values = {only_sharers:document.getElementById('onlySharersCheck').checked,
+                    low_likes:document.getElementById('lowLikesCheck').checked};
+    // Serialize rapid changes so an older response cannot overwrite the last click.
+    const pending = (groupPreferenceWrites.get(groupId) || Promise.resolve()).catch(() => {}).then(async () => {
+        const response = await fetch('/api/group_control_preferences/' + encodeURIComponent(groupId), {
+            method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(values), keepalive:true
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || 'Tercihler kaydedilemedi.');
+    });
+    groupPreferenceWrites.set(groupId, pending);
+    pending.catch(() => showValidationToast('Grup tercihleri kaydedilemedi. Seçeneği tekrar değiştirerek deneyin.'));
+}

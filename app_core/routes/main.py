@@ -1118,3 +1118,28 @@ def debug_db(post_code):
 
 
 
+
+
+@main_bp.route('/api/group_control_preferences/<thread_id>', methods=['GET', 'POST'])
+def group_control_preferences(thread_id):
+    if not thread_id or len(thread_id) > 200 or not all(c.isalnum() or c in '_-' for c in thread_id):
+        return jsonify(ok=False, error='Geçersiz grup.'), 400
+    key = 'group_control_preferences:' + thread_id
+    fields = ('only_sharers', 'low_likes')
+    conn = _connect()
+    try:
+        if request.method == 'POST':
+            data = request.get_json(silent=True)
+            if not isinstance(data, dict) or set(data) != set(fields) or any(type(data[f]) is not bool for f in fields):
+                return jsonify(ok=False, error='İki seçenek de açık veya kapalı olarak gönderilmeli.'), 400
+            conn.execute('INSERT OR REPLACE INTO key_value (key,value) VALUES (?,?)', (key, json.dumps(data)))
+            conn.commit()
+        else:
+            row = conn.execute('SELECT value FROM key_value WHERE key=?', (key,)).fetchone()
+            data = json.loads(row['value']) if row else {}
+        return jsonify(ok=True, preferences={f: data.get(f) is True for f in fields})
+    except Exception:
+        logger.exception('Grup kontrol tercihleri kaydedilemedi/okunamadı')
+        return jsonify(ok=False, error='Grup tercihleri alınamadı veya kaydedilemedi. Tekrar deneyin.'), 503
+    finally:
+        conn.close()

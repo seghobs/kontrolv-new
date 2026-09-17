@@ -29,7 +29,7 @@ const context = {
         querySelector: selector => selector.endsWith('.dropdown-text') ? dropdownText : dropdownOptions,
         createElement: () => element(),
     },
-    Event: class {}, validateForm() {},
+    Event: class {}, validateForm() {}, saveGroupControlPreferences() {},
 };
 vm.createContext(context);
 vm.runInContext(['handleLowLikesCheckbox', 'renderPosts', 'selectPostInUI', 'addAllPosts'].map(extract).join('\n'), context);
