@@ -1,5 +1,5 @@
 // Keep the status message current and open results as soon as the server finishes.
-function startResultPolling(postCode, onMissing) {
+function startResultPolling(postCode, onMissing, onFinished) {
     const loadingMsg = document.getElementById('loading-message');
     let finished = false;
     let retryDelay = 1000;
@@ -20,6 +20,7 @@ function startResultPolling(postCode, onMissing) {
                 if (data.status === 'completed') {
                     if (loadingMsg) loadingMsg.textContent = 'Denetim tamamlandı, sonuçlar açılıyor...';
                 }
+                if (onFinished) onFinished();
                 window.location.assign('/result/' + encodeURIComponent(postCode));
                 return;
             }
@@ -43,6 +44,7 @@ function startResultPolling(postCode, onMissing) {
                     const outcome = await run.json();
                     if (['completed', 'failed', 'cancelled'].includes(outcome.status)) {
                         finished = true;
+                        if (onFinished) onFinished();
                         window.location.assign('/result/' + encodeURIComponent(postCode));
                         return;
                     }

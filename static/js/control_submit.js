@@ -17,10 +17,16 @@
         const url = new URL(window.location.href);
         url.searchParams.set('task', jobId);
         window.history.replaceState(null, '', url);
-        startResultPolling(jobId, () => {
+        function clearPending() {
             setBusy(false);
-            url.searchParams.delete('task');
-            window.history.replaceState(null, '', url);
+            const current = new URL(window.location.href);
+            current.searchParams.delete('task');
+            window.history.replaceState(window.history.state, '', current);
+        }
+        startResultPolling(jobId, clearPending, () => {
+            // Leave a reusable form in browser history, including BFCache restores.
+            clearPending();
+            if (message()) message().textContent = '';
         });
     }
     window.submitControl = async (form) => {
