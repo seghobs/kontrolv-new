@@ -1129,6 +1129,16 @@ function validateForm() {
         isValid = singleInput && singleInput.value.trim().length > 0;
     }
 
+    const selectedLinks = document.getElementById(
+        window._checkMode === 'multi' ? 'post_link_multi' : 'post_link_single'
+    )?.value.trim() || '';
+    const options = document.getElementById('homeOptions');
+    if (options && selectedLinks && selectedLinks !== validateForm.lastSelection) {
+        options.open = true;
+    }
+    // Revalidating the same selection must respect a manual collapse.
+    validateForm.lastSelection = selectedLinks;
+
     // We don't disable the button anymore to allow clicks for feedback
     if (!isValid) {
         submitBtn.classList.add("btn-disabled");
