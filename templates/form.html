@@ -66,6 +66,40 @@
                     <form id="checkForm" method="post" action="/">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="thread_id" id="thread_id_input">
+                        <details class="home-options" id="homeOptions"><summary><span><i class="fas fa-sliders" aria-hidden="true"></i> Ek seçenekler</span><span class="home-options-hint">Filtreler ve bağlantı araçları <i class="fas fa-chevron-down" aria-hidden="true"></i></span></summary><div class="home-options-body">                            <label id="sharersFilterWrapper" class="modern-checkbox-wrapper mb-3" for="onlySharersCheck" style="display: none;">
+                                <div class="checkbox-content">
+                                    <div class="icon-box">
+                                         <i class="fas fa-filter"></i>
+                                    </div>
+                                    <div class="text-content">
+                                        <span class="title">Sadece Atanları Getir</span>
+                                        <span class="desc">Gruptaki herkes yerine paylaşım yapanları listeler</span>
+                                    </div>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="onlySharersCheck" onchange="handleSharersCheckbox()">
+                                    <span class="slider"></span>
+                                </label>
+                            </label>
+
+                            <!-- Yeni Filtre: Beğenisi 90 ve altı olanlar -->
+                            <label id="lowLikesFilterWrapper" class="modern-checkbox-wrapper mb-3" for="lowLikesCheck" style="display: none;">
+                                <div class="checkbox-content">
+                                    <div class="icon-box coffee-icon-box" style="background: rgba(139, 109, 78, 0.15); color: #8b6d4e;">
+                                         <i class="fas fa-heart-broken"></i>
+                                    </div>
+                                    <div class="text-content">
+                                        <span class="title">Beğenisi 90 ve Altı Olanlar</span>
+                                        <span class="desc">90 ve altı beğeni alan paylaşımları anında seçer (Üye listesini değiştirmez)</span>
+                                    </div>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="lowLikesCheck" name="check_likes" value="on" onchange="handleLowLikesCheckbox()">
+                                    <span class="slider coffee-slider"></span>
+                                </label>
+                            </label>
+
+<div id="homeUtilities"></div></div></details>
                         <div class="mb-3">
 
                             <div class="home-step"><span>01</span><label for="post_link_single">Paylaşım</label></div>
@@ -257,40 +291,7 @@
         </div>
     </div>
 
-                        <details class="home-options" id="homeOptions"><summary><span><i class="fas fa-sliders" aria-hidden="true"></i> Ek seçenekler</span><span class="home-options-hint">Filtreler ve bağlantı araçları <i class="fas fa-chevron-down" aria-hidden="true"></i></span></summary><div class="home-options-body">                            <label id="sharersFilterWrapper" class="modern-checkbox-wrapper mb-3" for="onlySharersCheck" style="display: none;">
-                                <div class="checkbox-content">
-                                    <div class="icon-box">
-                                         <i class="fas fa-filter"></i>
-                                    </div>
-                                    <div class="text-content">
-                                        <span class="title">Sadece Atanları Getir</span>
-                                        <span class="desc">Gruptaki herkes yerine paylaşım yapanları listeler</span>
-                                    </div>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="onlySharersCheck" onchange="handleSharersCheckbox()">
-                                    <span class="slider"></span>
-                                </label>
-                            </label>
 
-                            <!-- Yeni Filtre: Beğenisi 90 ve altı olanlar -->
-                            <label id="lowLikesFilterWrapper" class="modern-checkbox-wrapper mb-3" for="lowLikesCheck" style="display: none;">
-                                <div class="checkbox-content">
-                                    <div class="icon-box coffee-icon-box" style="background: rgba(139, 109, 78, 0.15); color: #8b6d4e;">
-                                         <i class="fas fa-heart-broken"></i>
-                                    </div>
-                                    <div class="text-content">
-                                        <span class="title">Beğenisi 90 ve Altı Olanlar</span>
-                                        <span class="desc">90 ve altı beğeni alan paylaşımları anında seçer (Üye listesini değiştirmez)</span>
-                                    </div>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="lowLikesCheck" name="check_likes" value="on" onchange="handleLowLikesCheckbox()">
-                                    <span class="slider coffee-slider"></span>
-                                </label>
-                            </label>
-
-<div id="homeUtilities"></div></div></details>
                         <button type="submit" id="submitCheckBtn" class="btn btn-primary w-100 mb-3 mt-4">
                             <i class="fas fa-search me-2"></i>Kontrol Et
                         </button>
