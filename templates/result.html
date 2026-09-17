@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Cache Devre Disi: Chrome, Safari, Firefox hicbir sayfayi hatirlamamali -->
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0">
     <meta http-equiv="Pragma" content="no-cache">
@@ -45,7 +45,8 @@
             return originalFetch(input, init);
         };
     </script>
-    </head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme_refresh.css') }}">
+</head>
 <body class="report-page" {% if rate_limited %}data-rate-limited="true"{% endif %}>
 
 

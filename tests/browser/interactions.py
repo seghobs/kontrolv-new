@@ -27,6 +27,7 @@ with sync_playwright() as p:
  assert calls==['alice','bob'];assert page.locator('[data-batch-results]').inner_text().count('Tamamlandı')==2
  choose(page,'[data-sort]','missing');assert page.locator('.followup-post').first.get_attribute('data-missing')=='1'
  page.goto('http://127.0.0.1:5087/')
+ page.locator('#homeOptions > summary').click()
  page.locator('summary').filter(has_text='Mesajdan').click()
  page.fill('[data-pasted-message]','mesaj https://instagram.com/p/ABC/ https://instagram.com/reel/ABC/')
  page.click('[data-extract]');assert '1 tekrar' in page.locator('[data-extract-status]').inner_text()

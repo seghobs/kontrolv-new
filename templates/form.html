@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Cache Devre Disi: Chrome, Safari, Firefox hicbir sayfayi hatirlamamali -->
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0">
     <meta http-equiv="Pragma" content="no-cache">
@@ -44,27 +44,31 @@
             return originalFetch(input, init);
         };
     </script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/theme_refresh.css') }}">
 </head>
-<body {% if token_error_message %}data-token-error-message="{{ token_error_message|e }}"{% endif %}>
+<body class="home-page" {% if token_error_message %}data-token-error-message="{{ token_error_message|e }}"{% endif %}>
 
-    <div class="container">
+    <header class="home-topbar"><a class="home-brand" href="/" aria-label="Ana sayfa"><i class="fas fa-comments" aria-hidden="true"></i><span>Yorum Kontrolleri</span></a><nav aria-label="Ana menü"><a href="/history"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i><span>Geçmiş</span></a><a href="/tools"><i class="fas fa-layer-group" aria-hidden="true"></i><span>Araçlar & şablonlar</span></a><a href="/admin"><i class="fas fa-sliders" aria-hidden="true"></i><span>Yönetim</span></a></nav></header>
+    <div class="container home-container">
         <div class="row justify-content-center">
-            <div class="col-12 col-md-10 col-lg-8 col-xl-6">
+            <div class="col-12 home-column">
                 <div class="form-card">
                     <div class="form-header-wrap">
                         <div class="form-header-badge">
                             <i class="fas fa-comments"></i>
                         </div>
                         <div class="form-header-text">
-                            <h2>Yorum Kontrolleri</h2>
-                            <span class="form-header-sub">Instagram Gönderi & Yorum Denetim Sistemi</span>
+                            <span class="home-eyebrow">YENİ DENETİM</span><h2>Kontrol sende.</h2>
+                            <span class="form-header-sub">Paylaşımını seç, üyelerini ekle. Sonuçları birlikte görelim.</span>
                         </div>
                     </div>
+                    <div id="homeResume"></div>
                     <form id="checkForm" method="post" action="/">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="thread_id" id="thread_id_input">
                         <div class="mb-3">
 
+                            <div class="home-step"><span>01</span><label for="post_link_single">Paylaşım</label></div>
                             <div class="mode-toggle-group">
                                 <div class="mode-toggle-glider" id="modeGlider"></div>
                                 <button type="button" id="modeSingle" class="mode-toggle-btn active" onclick="setCheckMode('single')">
@@ -74,39 +78,6 @@
                                     <i class="fas fa-layer-group"></i><span>Toplu Kontrol</span>
                                 </button>
                             </div>
-                            <label id="sharersFilterWrapper" class="modern-checkbox-wrapper mb-3" for="onlySharersCheck" style="display: none;">
-                                <div class="checkbox-content">
-                                    <div class="icon-box">
-                                         <i class="fas fa-filter"></i>
-                                    </div>
-                                    <div class="text-content">
-                                        <span class="title">Sadece Atanları Getir</span>
-                                        <span class="desc">Gruptaki herkes yerine paylaşım yapanları listeler</span>
-                                    </div>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="onlySharersCheck" onchange="handleSharersCheckbox()">
-                                    <span class="slider"></span>
-                                </label>
-                            </label>
-                            
-                            <!-- Yeni Filtre: Beğenisi 90 ve altı olanlar -->
-                            <label id="lowLikesFilterWrapper" class="modern-checkbox-wrapper mb-3" for="lowLikesCheck" style="display: none;">
-                                <div class="checkbox-content">
-                                    <div class="icon-box coffee-icon-box" style="background: rgba(139, 109, 78, 0.15); color: #8b6d4e;">
-                                         <i class="fas fa-heart-broken"></i>
-                                    </div>
-                                    <div class="text-content">
-                                        <span class="title">Beğenisi 90 ve Altı Olanlar</span>
-                                        <span class="desc">90 ve altı beğeni alan paylaşımları anında seçer (Üye listesini değiştirmez)</span>
-                                    </div>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="lowLikesCheck" name="check_likes" value="on" onchange="handleLowLikesCheckbox()">
-                                    <span class="slider coffee-slider"></span>
-                                </label>
-                            </label>
-
                             <div id="modeHint" class="mode-hint">
                                 Tekli kontrol: Tek bir post/reel linki gir.
                             </div>
@@ -132,7 +103,7 @@
                         </div>
                         <div class="mb-3">
                             <label for="grup_uye" class="form-label d-flex align-items-center">
-                                <div><i class="fas fa-users me-2"></i>Grup Üye Listesi</div>
+                                <div class="home-step"><span>02</span><span class="home-step-label">Üyeler</span></div>
                                 <span id="selectedGroupBadge" class="badge ms-auto" style="background: rgba(196, 149, 106, 0.15); border: 1px solid rgba(196, 149, 106, 0.4); color: var(--accent-caramel); font-weight: 600; letter-spacing: 0.5px; display: none; padding: 6px 10px;"></span>
                             </label>
                             <div class="mb-2">
@@ -242,6 +213,7 @@
                             </div>
 
 
+                            <details class="home-member-editor"><summary><i class="fas fa-user-pen" aria-hidden="true"></i> Üyeleri düzenle veya elle ekle <i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
                             <div class="tag-input-wrapper">
                                 <div id="tagSearchWrapper" style="display: none; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 10px;">
                                     <input type="text" id="tagSearchInput" class="tag-search-input" placeholder="Listede ara..." oninput="filterUserTags(this.value)">
@@ -252,6 +224,7 @@
                                 <input type="text" id="tagAddInput" class="tag-add-input" placeholder="Kullanıcı adı ekleyin ve Enter'a basın...">
                             </div>
 
+                            </details>
                             <textarea id="grup_uye" name="grup_uye" class="d-none" required></textarea>
                             <span id="user_count" class="mb-3">0 Adet kullanıcı eklendi.</span>
                         </div>
@@ -284,21 +257,47 @@
         </div>
     </div>
 
+                        <details class="home-options" id="homeOptions"><summary><span><i class="fas fa-sliders" aria-hidden="true"></i> Ek seçenekler</span><span class="home-options-hint">Filtreler ve bağlantı araçları <i class="fas fa-chevron-down" aria-hidden="true"></i></span></summary><div class="home-options-body">                            <label id="sharersFilterWrapper" class="modern-checkbox-wrapper mb-3" for="onlySharersCheck" style="display: none;">
+                                <div class="checkbox-content">
+                                    <div class="icon-box">
+                                         <i class="fas fa-filter"></i>
+                                    </div>
+                                    <div class="text-content">
+                                        <span class="title">Sadece Atanları Getir</span>
+                                        <span class="desc">Gruptaki herkes yerine paylaşım yapanları listeler</span>
+                                    </div>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="onlySharersCheck" onchange="handleSharersCheckbox()">
+                                    <span class="slider"></span>
+                                </label>
+                            </label>
+
+                            <!-- Yeni Filtre: Beğenisi 90 ve altı olanlar -->
+                            <label id="lowLikesFilterWrapper" class="modern-checkbox-wrapper mb-3" for="lowLikesCheck" style="display: none;">
+                                <div class="checkbox-content">
+                                    <div class="icon-box coffee-icon-box" style="background: rgba(139, 109, 78, 0.15); color: #8b6d4e;">
+                                         <i class="fas fa-heart-broken"></i>
+                                    </div>
+                                    <div class="text-content">
+                                        <span class="title">Beğenisi 90 ve Altı Olanlar</span>
+                                        <span class="desc">90 ve altı beğeni alan paylaşımları anında seçer (Üye listesini değiştirmez)</span>
+                                    </div>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="lowLikesCheck" name="check_likes" value="on" onchange="handleLowLikesCheckbox()">
+                                    <span class="slider coffee-slider"></span>
+                                </label>
+                            </label>
+
+<div id="homeUtilities"></div></div></details>
                         <button type="submit" id="submitCheckBtn" class="btn btn-primary w-100 mb-3 mt-4">
                             <i class="fas fa-search me-2"></i>Kontrol Et
                         </button>
                     <p id="loading-message" role="status" aria-live="polite" class="text-center small"></p>
                     </form>
 
-                    <div class="d-none d-lg-flex gap-2">
-                        <button type="button" onclick="location.href='token_al'" class="btn btn-secondary flex-grow-1">
-                            <i class="fas fa-key me-2" style="color: var(--accent-caramel);"></i>Token Al
-                        </button>
-                        <a href="{{ url_for('history.index') }}" class="btn btn-admin"><i class="fas fa-clock-rotate-left me-2" aria-hidden="true" style="color: var(--accent-caramel);"></i>Denetim Geçmişi</a>
-                        <button type="button" onclick="location.href='admin'" class="btn btn-admin flex-grow-1">
-                            <i class="fas fa-lock me-2" style="color: var(--accent-caramel);"></i>Admin Panel
-                        </button>
-                    </div>
+                    <p class="home-footnote"><i class="fas fa-layer-group" aria-hidden="true"></i> Sık yaptığın kontroller için <a href="/tools#presets">kayıtlı şablonlarını kullan</a>.</p>
                 </div>
             </div>
         </div>
@@ -310,10 +309,8 @@
             <i class="fas fa-home"></i>
             <span>Anasayfa</span>
         </a>
-        <a href="/token_al" class="nav-item">
-            <i class="fas fa-key"></i>
-            <span>Token Al</span>
-        </a>
+        <a href="/history" class="nav-item"><i class="fas fa-clock-rotate-left"></i><span>Geçmiş</span></a>
+        <a href="/tools" class="nav-item"><i class="fas fa-layer-group"></i><span>Araçlar</span></a>
         <a href="/admin" class="nav-item">
             <i class="fas fa-user-shield"></i>
             <span>Admin Panel</span>
@@ -341,7 +338,7 @@
                 <i class="fas fa-coffee me-2"></i>Paylaşım Seçimi Hazır!
             </div>
             <div class="modal-text" style="font-size: 14px; margin-bottom: 20px; line-height: 1.6;">
-                Bu grup için bugünün kontrol edilecek paylaşımı veritabanından yüklendi. 
+                Bu grup için bugünün kontrol edilecek paylaşımı veritabanından yüklendi.
                 Canlı kontrolü şimdi başlatmak ister misiniz?
             </div>
             <div class="modal-actions d-flex gap-2">
@@ -521,14 +518,14 @@
             const urlParams = new URLSearchParams(window.location.search);
             const link = urlParams.get('link') || '';
             const group = urlParams.get('group') || '';
-            
+
             if (link) {
                 document.getElementById('post_link').value = decodeURIComponent(link);
             }
             if (group) {
                 document.getElementById('grup_uye').value = decodeURIComponent(group);
             }
-            
+
             if (link) {
                 setTimeout(function() {
                     document.getElementById('kontrolForm').dispatchEvent(new Event('submit'));
