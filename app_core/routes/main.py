@@ -137,7 +137,7 @@ def get_group_posts(thread_id):
         except Exception:
             target_date = now
     
-    result = fetch_group_media_with_failover(thread_id, target_date)
+    result = fetch_group_media_with_failover(thread_id, target_date, complete=True)
     if result.get('ok'):
         from app_core.followup import write, read, link_key
         dates=read('shared-dates:'+thread_id,{})

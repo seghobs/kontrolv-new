@@ -963,14 +963,84 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
             else: raise ValueError('Mesaj sınırına ulaşıldı; tam liste doğrulanamadı.')
             t_data['thread']['items']=all_messages
 
+        # Direct media galleries can omit Reels delivered as clip/media_share messages.
+        # Merge those attachments from the fully paginated conversation, excluding stories.
+        thread_messages = ((t_data or {}).get('thread') or {}).get('items') or []
+        story_count = 0
+        known_codes = {i['media'].get('code') for i in items
+                       if isinstance(i, dict) and isinstance(i.get('media'), dict)}
+        for message in thread_messages:
+            if not isinstance(message, dict):
+                continue
+            stamp = message.get('timestamp') or 0
+            if not min_ts <= stamp <= max_ts:
+                continue
+            if message.get('item_type') in ('reel_share', 'story_share', 'story_reply', 'xma_story_share'):
+                story_count += 1
+                continue
+            if message.get('item_type') == 'xma_media_share':
+                import re
+                from urllib.parse import urlparse
+                from donustur import donustur
+                attachments = message.get('xma_media_share')
+                for attachment in attachments if isinstance(attachments, list) else []:
+                    if not isinstance(attachment, dict):
+                        continue
+                    url = attachment.get('target_url')
+                    if not isinstance(url, str):
+                        continue
+                    parsed = urlparse(url)
+                    match = re.fullmatch(r'/(p|reels?|tv)/([\w-]+)/?', parsed.path)
+                    if parsed.hostname not in ('instagram.com', 'www.instagram.com') or not match:
+                        continue
+                    kind, code = match.groups()
+                    if code in known_codes:
+                        continue
+                    known_codes.add(code)
+                    media_id = str(donustur(f'https://www.instagram.com/p/{code}/') or '')
+                    shared_media = {'id':media_id, 'code':code,
+                                    'media_type':2 if kind in ('reel','reels','tv') else 1,
+                                    'user':{'username':thread_users_map.get(str(message.get('user_id')), 'unknown')},
+                                    'image_versions2':{'candidates':[{'url':attachment.get('preview_url')}]}}
+                    # Resolve missing gallery entries for accurate owners, likes and Reels type.
+                    # Keep the link visible when metadata cannot be retrieved.
+                    try:
+                        if complete and time.monotonic() - pagination_started > 100:
+                            raise TimeoutError('Metadata budget exhausted')
+                        info = _get_http_session(username).get(
+                            f'https://i.instagram.com/api/v1/media/{media_id}/info/', headers=headers, timeout=10)
+                        _update_session_from_response(username, info)
+                        details = info.json().get('items') if info.status_code == 200 else None
+                        if isinstance(details, list) and details and isinstance(details[0], dict) and details[0].get('code') == code:
+                            shared_media.update(details[0])
+                    except Exception:
+                        logger.warning('Paylaşım bilgisi alınamadı; bağlantı listede korunuyor.')
+                    items.append({'timestamp':stamp, 'user_id':message.get('user_id'), 'media':shared_media})
+            shared = message.get('media_share')
+            clip = message.get('clip') or {}
+            if not isinstance(shared, dict) and isinstance(clip, dict):
+                shared = clip.get('media')
+                if not shared and isinstance(clip.get('clip'), dict):
+                    shared = clip['clip'].get('media')
+            if isinstance(shared, dict) and shared.get('code'):
+                items.append({'timestamp':stamp, 'user_id':message.get('user_id'), 'media':shared})
+        turkish_months = {1:'Ocak',2:'Şubat',3:'Mart',4:'Nisan',5:'Mayıs',6:'Haziran',
+                          7:'Temmuz',8:'Ağustos',9:'Eylül',10:'Ekim',11:'Kasım',12:'Aralık'}
         posts = []
         for item in items:
+            if not isinstance(item, dict):
+                continue
             media = item.get("media") or {}
+            if not isinstance(media, dict) or media.get("product_type") == "story":
+                continue
+            media = dict(media)
+            for field in ("user", "image_versions2"):
+                if not isinstance(media.get(field), dict): media[field] = {}
             code = media.get("code")
             if not code:
                 continue
             
-            timestamp = item.get("timestamp", 0)
+            timestamp = int(item.get("timestamp") or 0)
             
             if timestamp < min_ts or timestamp > max_ts:
                 continue
@@ -979,12 +1049,6 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
             dt_utc = datetime.datetime.utcfromtimestamp(timestamp_sec)
             dt_utc = utc.localize(dt_utc)
             dt = dt_utc.astimezone(gmt3)
-            
-            turkish_months = {
-                1: "Ocak", 2: "Şubat", 3: "Mart", 4: "Nisan",
-                5: "Mayıs", 6: "Haziran", 7: "Temmuz", 8: "Ağustos",
-                9: "Eylül", 10: "Ekim", 11: "Kasım", 12: "Aralık"
-            }
             
             taken_at = media.get("taken_at", 0)
             if taken_at:
@@ -998,8 +1062,8 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
             date = f"({upload_date}) {dt.day} {turkish_months[dt.month]} {dt.strftime('%H:%M')}"
             
             sender_pk = str(item.get("user_id", "") or item.get("sender_id", ""))
-            post_owner_pk = str(media.get("user", {}).get("pk", "") or media.get("user", {}).get("id", ""))
-            post_owner_username = media.get("user", {}).get("username", "") or item.get("media_share", {}).get("user", {}).get("username", "")
+            post_owner_pk = str((media.get("user") or {}).get("pk", "") or (media.get("user") or {}).get("id", ""))
+            post_owner_username = (media.get("user") or {}).get("username", "") or (item.get("media_share") or {}).get("user", {}).get("username", "")
             
             final_sender = post_owner_username
             
@@ -1009,7 +1073,7 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
                     final_sender = thread_users_map[sender_pk]
                 else:
                     # Eger thread icinde user objesi olarak gelmisse (nadir)
-                    alt_user = item.get("user", {}).get("username", "")
+                    alt_user = (item.get("user") or {}).get("username", "")
                     if alt_user:
                         final_sender = alt_user
             
@@ -1042,10 +1106,11 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
                 if c_versions:
                     thumbnail_url = c_versions[-1].get("url") or c_versions[0].get("url")
 
-            user_profile_pic_url = media.get("user", {}).get("profile_pic_url") or item.get("user", {}).get("profile_pic_url") or ""
+            user_profile_pic_url = (media.get("user") or {}).get("profile_pic_url") or (item.get("user") or {}).get("profile_pic_url") or ""
 
             posts.append({
                 "id": media.get("id"),
+                "media_type": "video" if media.get("media_type") == 2 or media.get("product_type") == "clips" else "image",
                 "code": code,
                 "url": f"https://www.instagram.com/p/{code}/",
                 "shared_at": datetime.datetime.utcfromtimestamp(timestamp_sec).isoformat() + "Z",
@@ -1066,7 +1131,9 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
             try:
                 items = t_data.get("thread", {}).get("items", [])
                 for item in items:
-                    timestamp = item.get("timestamp", 0)
+                    if not isinstance(item, dict) or item.get("item_type") in ("reel_share", "story_share", "story_reply", "xma_story_share"):
+                        continue
+                    timestamp = int(item.get("timestamp") or 0)
                     if timestamp < min_ts or timestamp > max_ts:
                         continue
                     
@@ -1078,11 +1145,12 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
                         text += " " + str(item.get("link", {}).get("text", ""))
                         
                     import re
-                    matches = re.findall(r"instagram\.com/(?:share/)?(?:p|reels?|tv)/([a-zA-Z0-9\-_]+)", text)
-                    for code in matches:
+                    matches = re.findall(r"instagram\.com/(?:share/)?(p|reels?|tv)/([a-zA-Z0-9\-_]+)", text)
+                    for kind, code in matches:
                         text_posts.append({
                             "code": code,
                             "sender_username": sender_username,
+                            "media_type": "video" if kind in ("reel", "reels", "tv") else "image",
                             "timestamp": timestamp
                         })
             except Exception as e:
@@ -1116,10 +1184,13 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
                         "comments_disabled": False,
                         "taken_at": timestamp_sec,
                         "is_recent": True,
-                        "media_type": "image",
+                        "media_type": tp["media_type"],
                     })
         
-        return {"ok": True, "posts": posts}
+        unique = {}
+        for post in posts:
+            unique.setdefault(post['code'], post)
+        return {"ok": True, "posts": sorted(unique.values(), key=lambda p:p.get('shared_at',''), reverse=True), "story_count":story_count}
     except Exception as e:
         logger.error("Grup paylasimlari cekme hatasi: %s", e)
         return {"ok": False, "error": str(e)}

@@ -724,10 +724,13 @@ function loadGroupPosts(threadIdFromMembers) {
                 dropdownText.textContent = "-- Paylaşım Seç --";
             }
             if (!data.ok) {
-                dropdownOptions.innerHTML = '<div class="dropdown-option" style="color: rgba(255,255,255,0.5);">Paylaşım bulunamadı</div>';
+                window.allFetchedPosts = [];
+                renderPosts();
+                dropdownOptions.textContent = data.error || 'Paylaşımların tamamı alınamadı. Tekrar deneyin.';
                 return;
             }
             
+            window.groupStoryCount = data.story_count || 0;
             if (data.posts) {
                 window.allFetchedPosts = data.posts;
                 data.posts.forEach(p => {
@@ -927,6 +930,20 @@ function renderPosts() {
         postsToRender.sort((a, b) => (a.username || '').localeCompare(b.username || '', 'tr'));
     }
     
+    const postDropdown = document.getElementById('postDropdown');
+    if (postDropdown) {
+        let summary = document.getElementById('postListSummary');
+        if (!summary) {
+            summary = document.createElement('p'); summary.id = 'postListSummary';
+            summary.className = 'small mt-2 mb-0'; summary.setAttribute('role', 'status');
+            postDropdown.after(summary);
+        }
+        const total = (window.allFetchedPosts || []).length;
+        summary.textContent = `${postsToRender.length} / ${total} post ve Reels gösteriliyor.` +
+            (window.groupStoryCount ? ` ${window.groupStoryCount} hikâye bu listeye dahil değil.` : '') +
+            (postsToRender.length < total ? ' Aktif filtreler listeyi daraltıyor.' : '');
+    }
+
     if (postsToRender.length > 0) {
         dropdownOptions.innerHTML = '';
         postsToRender.forEach(p => {

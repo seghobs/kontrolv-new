@@ -70,6 +70,6 @@ class DayPaginationTests(unittest.TestCase):
         with patch('app_core.instagram_api.current_token',return_value='token'),patch('app_core.instagram_api.extract_user_id_from_token',return_value='1'),patch('app_core.instagram_api.build_auth_headers',return_value={}),patch('app_core.instagram_api._get_http_session',return_value=http),patch('app_core.instagram_api._update_session_from_response'):
             result=fetch_group_media({'username':'test','token':'token','user_agent':'ua','android_id_yeni':'a','device_id':'d'},'group',datetime(2026,9,11),complete=True)
         self.assertTrue(result['ok'],result)
-        self.assertEqual(len(result['posts']),51)
+        self.assertEqual({p['code'] for p in result['posts']},{'ABC','DEF'})
         self.assertEqual(http.get.call_count,3)
         self.assertEqual(http.get.call_args.kwargs['params']['max_timestamp'],stamp-50)
