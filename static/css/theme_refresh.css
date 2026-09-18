@@ -17,3 +17,6 @@ body.home-page{display:block}.home-topbar{width:100%}.home-page .home-container{
 
 /* Keep the main action and member count visually distinct from secondary controls. */
 .home-page #submitCheckBtn{background:linear-gradient(110deg,#c69a70,#aa7e54)!important;color:#160e08!important}.home-page #submitCheckBtn:hover{background:#d1a67c!important}.home-page #user_count{border:0!important;background:none!important;padding:10px 2px!important;font-size:11px!important;text-align:left!important;box-shadow:none!important}
+
+/* Keep the search icon legible on the caramel action in every validation state. */
+.home-page #submitCheckBtn i{color:inherit!important;opacity:1!important}
