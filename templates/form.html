@@ -103,14 +103,15 @@
     <div class="home-step"><label>Kontrol türü</label></div>
     <input type="hidden" id="controlMode" name="control_mode" value="comments">
     <input type="hidden" id="checkLikesValue" name="check_likes" value="">
-    <div class="mode-toggle-group" role="group" aria-label="Kontrol türü">
-        <div class="mode-toggle-glider" id="controlTypeGlider"></div>
+    <div class="mode-toggle-group" style="--save-mode-count:3" role="group" aria-label="Kontrol türü">
+        <div class="mode-toggle-glider" id="controlTypeGlider" style="width:calc((100% - 10px) / 3) !important"></div>
         <button type="button" id="controlComments" class="mode-toggle-btn active" aria-pressed="true" onclick="setControlType('comments')"><i class="fas fa-comment"></i><span>Yorum</span></button>
         <button type="button" id="controlLikes" class="mode-toggle-btn" aria-pressed="false" onclick="setControlType('likes')"><i class="fas fa-heart"></i><span>Beğeni</span></button>
+        <button type="button" id="controlSaves" class="mode-toggle-btn" aria-pressed="false" onclick="setControlType('saves')"><i class="fas fa-bookmark"></i><span>Kaydet</span></button>
     </div>
     <p class="mode-hint" id="controlTypeHint">Paylaşımlara yapılan yorumlar kontrol edilir.</p>
 </div></div></details>
-                        <div class="mb-3">
+                        <div class="mb-3" id="saveIndividualPosts">
 
                             <div class="home-step"><span>01</span><label for="post_link_single">Paylaşım</label></div>
                             <div class="mode-toggle-group">

@@ -44,6 +44,31 @@ def _normalize_post_link(value):
     return html.unescape(str(value or "").strip())
 
 
+@admin_bp.route('/gemini_settings', methods=['GET', 'POST'])
+def gemini_settings():
+    denied = _require_admin()
+    if denied:
+        return denied
+    from flask import jsonify
+    from app_core.followup import write
+    from app_core.save_control import api_key, MODEL
+    if request.method == 'POST':
+        data = request.get_json(silent=True)
+        key = data.get('api_key') if isinstance(data, dict) else None
+        if not isinstance(key, str) or not 20 <= len(key.strip()) <= 512 or any(c.isspace() or not c.isascii() or not c.isprintable() for c in key.strip()):
+            return jsonify(success=False, message='Geçerli bir API anahtarı girin. Boş değer mevcut anahtarı silmez.'), 400
+        try:
+            write('settings:gemini_api', {'api_key': key.strip()})
+        except Exception:
+            return jsonify(success=False, message='Anahtar kaydedilemedi. Mevcut ayar korunuyor.'), 503
+        return jsonify(success=True, message='Gemini API anahtarı kaydedildi. Sonraki analiz isteğinde kullanılacak.', model=MODEL)
+    try:
+        key = api_key()
+    except ValueError:
+        key = ''
+    return jsonify(success=True, api_key=key, configured=bool(key), model=MODEL)
+
+
 @admin_bp.route("", methods=["GET"])
 @admin_bp.route("/", methods=["GET"])
 def panel():

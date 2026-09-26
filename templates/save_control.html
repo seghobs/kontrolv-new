@@ -1,0 +1,34 @@
+{% extends 'followup_base.html' %}
+{% block title %}Kaydet kontrolü{% endblock %}
+{% block body %}
+<link rel="stylesheet" href="{{ url_for('static',filename='css/save_control.css') }}">
+<div id="saveControl" data-run="{{ run.id if run else '' }}">
+<header class="member-hero"><span class="member-eyebrow"><i class="fas fa-bookmark"></i> KAYDET KONTROLÜ</span><h1>Paylaşımlar, kanıtlarıyla birlikte.</h1><p>O gün paylaşım yapan üyeler incelenir. Hikâyeler ve kişinin kendi paylaşımları kapsam dışıdır.</p></header>
+<p id="saveFeedback" role="status" aria-live="polite"></p>
+{% if not run %}
+<section class="member-section"><div class="member-section-head"><div><h2>Grubunu ve gününü seç</h2><p>Yalnız paylaşım gününün 20:00’si ile ertesi günün 18:00’i arasında gönderilen ekran görüntüleri değerlendirilir. Paylaşım kapanışı 22:30’dur. Saatler Türkiye saatidir.</p></div></div>
+<form id="saveStart" class="member-section-body" data-group="{{ group }}">
+<div class="save-fields"><label>Instagram grubu<select id="saveGroup" required><option value="">Gruplar yükleniyor…</option></select></label><label>Paylaşım günü<input id="saveDay" type="date" value="{{ yesterday }}" required></label></div>
+<div class="save-actions"><button type="button" data-date="yesterday">Dün</button><button type="button" data-date="today">Bugün</button><button type="submit" class="save-primary"><i class="fas fa-search"></i> Kanıtları topla</button></div>
+<p class="save-note">Görseller analiz hizmetine gönderilir. Sonuçlar kaydetme zamanını kanıtlamaz; benzer görseller için inceleme gerekebilir.</p>
+</form></section>
+{% if recent %}<section class="member-section"><div class="member-section-head"><h2>Kaydet raporların</h2></div><div class="member-section-body save-grid">{% for saved in recent %}<a class="save-post" href="/save-control/{{ saved.id }}"><strong>{{ saved.group_name }}</strong><p>{{ saved.day }} · {{ saved.answers|length }}/{{ saved.tasks|length }} analiz adımı</p></a>{% endfor %}</div></section>{% endif %}
+{% else %}
+<section class="member-section"><div class="member-section-head"><div><h2>{{ run.group_name }}</h2><p>{{ run.day }} · Son kanıt zamanı: {{ run.deadline[:16]|replace('T',' ') }} (Türkiye)</p><p>{{ 'Telafi süresi devam ediyor' if pending else 'Telafi süresi doldu' }} · Veri toplama: {{ run.collected_at[:16]|replace('T',' ') }}</p></div></div>
+<div class="member-section-body"><div class="member-summary"><div><span>POST / REELS</span><strong>{{ run.refs|length }}</strong></div><div><span>PAYLAŞAN ÜYE</span><strong>{{ run.members|length }}</strong></div><div><span>GÖRSEL</span><strong>{{ run.evidence|length }}</strong></div><div><span>ANALİZ ADIMI</span><strong>{{ run.answers|length }}/{{ run.tasks|length }}</strong></div></div>
+<div class="save-actions"><button id="saveAnalyze" class="save-primary" {% if run.answers|length == run.tasks|length %}disabled{% endif %}>{{ 'İncelenecek kanıt yok' if not run.tasks else 'Analiz tamamlandı' if run.answers|length == run.tasks|length else ('Kalan analize devam et' if run.answers else 'Görselleri analiz et') }}</button><a class="member-post-link" href="/save-control?group={{ run.thread_id }}" data-refresh-day="{{ run.day }}">Yeni kanıtları topla</a></div>
+{% if run.evidence_start %}<p>Kanıt kabul aralığı: {{ run.evidence_start[:16]|replace('T',' ') }} — {{ run.deadline[:16]|replace('T',' ') }} (Türkiye saati, iki sınır dahil).</p>{% endif %}{% if not run.evidence_start or run.evidence_start[11:16] != '20:00' %}<p>Bu rapor önceki zaman kuralıyla oluşturuldu. Güncel 20:00–ertesi gün 18:00 aralığıyla kontrol için yeni kanıtları toplayın.</p>{% endif %}
+<p>{{ run.skipped|length }} görüntü kanıt kabul başlangıcından önce gönderildiği için ayrı tutuldu. Yeni kanıtları toplamak mevcut raporu değiştirmez.</p>
+{% if run.error %}<p role="alert">{{ run.error }}</p>{% endif %}
+<p class="save-note">Model eşleşmesi bir adaydır. Görselleri karşılaştırarak onaylayabilirsin. “Görünmedi” sonucu, üyenin kesin kaydetmediği anlamına gelmez.</p></div></section>
+{% for member in members %}
+<section class="member-section"><div class="member-section-head"><div><h2>@{{ member.username }}</h2><p>{{ member.findings|length }} paylaşım · {{ member.evidence|length }} görüntü · Kendi paylaşımı hariç</p></div></div><div class="member-section-body">
+{% if not member.evidence %}<p>{{ 'Kanıt bekleniyor; telafi süresi devam ediyor.' if pending else 'Süresi doldu; ekran görüntüsü bulunamadı, doğrulanamadı.' }}</p>{% endif %}
+<div class="save-grid">{% for finding in member.findings %}<article class="save-post"><a href="{{ finding.url }}" target="_blank" rel="noopener"><img src="{{ finding.thumbnail }}" loading="lazy" referrerpolicy="no-referrer" alt="@{{ finding.username }} paylaşım referansı"><strong>@{{ finding.username }}</strong></a><span class="save-state {{ finding.state }}">{{ {'confirmed':'İnceleyerek doğrulandı','candidate':'Eşleşme adayı · Onay bekliyor','review':'İnceleme gerekli','not_visible':'Görüntülerde bulunamadı','waiting':'Kanıt / analiz bekleniyor','unverified':'Doğrulanamadı'}[finding.state] }}</span>
+{% for hit in finding.hits %}<p>{{ hit.reason }}{% if hit.status == 'matched' %} · {{ hit.row }}. satır, {{ hit.column }}. sütun{% endif %}</p>{% endfor %}
+{% if member.evidence %}<div class="save-actions"><button data-review="confirmed" data-member="{{ member.id }}" data-ref="{{ finding.id }}">Görselde doğruladım</button><button data-review="rejected" data-member="{{ member.id }}" data-ref="{{ finding.id }}">Şüpheli</button></div>{% endif %}</article>{% endfor %}</div>
+{% if member.evidence %}<details><summary>Üyenin tüm ekran görüntülerini aç ({{ member.evidence|length }})</summary><div class="save-evidence">{% for evidence in member.evidence %}<figure><a href="{{ evidence.url }}" target="_blank" rel="noopener"><img src="{{ evidence.url }}" loading="lazy" referrerpolicy="no-referrer" alt="@{{ member.username }} kaydet kanıtı"></a><figcaption>{{ evidence.sent_at[:16]|replace('T',' ') }}</figcaption></figure>{% endfor %}</div></details>{% endif %}
+</div></section>{% endfor %}
+{% endif %}</div>
+<script src="{{ url_for('static',filename='js/save_control.js') }}" defer></script>
+{% endblock %}

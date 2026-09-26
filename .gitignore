@@ -52,3 +52,6 @@ tokens.json
 .pythonanywhere-setup.json
 .kontrol-setup.lock
 .kontrol-backups/
+
+# Local image analysis credential
+.gemini-api-key

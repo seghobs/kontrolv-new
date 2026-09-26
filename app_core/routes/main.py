@@ -713,6 +713,8 @@ def recheck_post(post_code):
 @main_bp.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
+        if request.form.get("control_mode") == "saves":
+            return redirect(url_for("save_control.page", group=request.form.get("thread_id", "")), code=303)
         from app_core.followup import extract_links, rules_for
         link = request.form.get('post_link', '').strip()
         def invalid_input(message):
@@ -1135,6 +1137,7 @@ def debug_db(post_code):
 
 
 GROUP_CONTROL_DEFAULTS = {
+    '340282366841710301281157258447286771667': 'saves',
     '340282366841710301281152316007215030727': 'comments',
     '340282366841710301281152285221828141838': 'likes',
     '340282366841710301281176651461280340717': 'comments',
@@ -1154,13 +1157,13 @@ def group_control_preferences(thread_id):
     try:
         if request.method == 'POST':
             data = request.get_json(silent=True)
-            if not isinstance(data, dict) or set(data) not in (set(fields), set(fields) | {'control_mode'}) or any(type(data[f]) is not bool for f in fields) or ('control_mode' in data and data['control_mode'] not in ('comments','likes')):
+            if not isinstance(data, dict) or set(data) not in (set(fields), set(fields) | {'control_mode'}) or any(type(data[f]) is not bool for f in fields) or ('control_mode' in data and data['control_mode'] not in ('comments','likes','saves')):
                 return jsonify(ok=False, error='İki seçenek de açık veya kapalı olarak gönderilmeli.'), 400
             # Legacy checkbox-only clients must not erase the saved control type.
             if 'control_mode' not in data:
                 previous = conn.execute('SELECT value FROM key_value WHERE key=?', (key,)).fetchone()
                 previous = json.loads(previous['value']) if previous else {}
-                if previous.get('control_mode') in ('comments','likes'):
+                if previous.get('control_mode') in ('comments','likes','saves'):
                     data['control_mode'] = previous['control_mode']
             conn.execute('INSERT OR REPLACE INTO key_value (key,value) VALUES (?,?)', (key, json.dumps(data)))
             conn.commit()
@@ -1168,7 +1171,7 @@ def group_control_preferences(thread_id):
             row = conn.execute('SELECT value FROM key_value WHERE key=?', (key,)).fetchone()
             data = json.loads(row['value']) if row else {}
         mode = data.get('control_mode')
-        if mode not in ('comments','likes'):
+        if mode not in ('comments','likes','saves'):
             mode = GROUP_CONTROL_DEFAULTS.get(thread_id, 'comments')
         return jsonify(ok=True, preferences={f: data.get(f) is True for f in fields}, control_mode=mode)
     except Exception:

@@ -18,7 +18,7 @@
         <a class="suite-home" href="/"><i class="fas fa-arrow-left" aria-hidden="true"></i><span>Kontrole dön</span></a>
     </div>
     <nav class="suite-nav" aria-label="Denetim merkezi">
-        {% for href,label,icon in [('/history','Denetim geçmişi','clock-rotate-left'),('/tools','Araçlar','sliders')] %}<a href="{{ href }}" {% if request.path==href %}aria-current="page"{% endif %}><i class="fas fa-{{ icon }}" aria-hidden="true"></i>{{ label }}</a>{% endfor %}
+        {% for href,label,icon in [('/history','Denetim geçmişi','clock-rotate-left'),('/tools','Araçlar','sliders'),('/save-control','Kaydet','bookmark')] %}<a href="{{ href }}" {% if request.path==href %}aria-current="page"{% endif %}><i class="fas fa-{{ icon }}" aria-hidden="true"></i>{{ label }}</a>{% endfor %}
         {% if session.get('admin_logged_in') %}{% for href,label,icon in [('/group-rules','Grup kuralları','layer-group'),('/backups','Yedekler','database'),('/trash','Çöp kutusu','trash-can')] %}<a href="{{ href }}" {% if request.path==href %}aria-current="page"{% endif %}><i class="fas fa-{{ icon }}" aria-hidden="true"></i>{{ label }}</a>{% endfor %}{% endif %}
     </nav>
     {% block body %}{% endblock %}

@@ -46,3 +46,21 @@
 14 Eylül 2026: PythonAnywhere üzerinde ana sayfa, gerçek yönetici girişi, yetkisiz yedek erişiminin reddi, grup kuralları, yedekler, çöp kutusu, geçmiş, araçlar, kayıtlı gerçek rapor, takip ekranı ve XLSX indirme doğrulandı. Yayın öncesinde kod ve veritabanı kopyası özel yedek dizinine alındı; canlı veritabanı dosyası yükleme işlemine dahil edilmedi.
 
 Ayrı yerel kopyada 30 gerçek kayıtlı rapor başarıyla görüntülendi. Aynı kopyanın yeni başlangıç şema kontrolü bütünlük ve kayıt sayısı kaybı olmadan geçti. Gerçek Instagram'a toplu istek yüklemesi yapılmadı; dış servis hata/eksik veri senaryoları kontrollü yanıtlarla test edildi. Toplu analizde ilk başarısız sonuçtan sonra durma ve yanlış tamamlandı mesajı göstermeme ayrıca tarayıcıda doğrulandı.
+
+
+## Kaydet kontrolü — 26 Eylül 2026
+
+### Güncel ayarlar ve doğrulama
+
+- Kanıt aralığı paylaşım günü 20:00–ertesi gün 18:00; paylaşım kapanışı 22:30 olarak korunur.
+- Admin panelindeki **Gemini API · Kaydet analizi** kartı etkin anahtarı yükler; Göster/Gizle ve Kaydet işlemleri desteklenir. Panelden kaydedilen anahtar veritabanında korunur ve ortam değişkeni/dosya ayarından önceliklidir. Sonraki analiz isteğinde yeniden başlatmadan kullanılır.
+- 214 backend testi geçti. Admin dışında anahtar okuma/yazma engellenir; boş veya hatalı giriş eski anahtarı korur. Playwright ile masaüstü/mobil görünüm, göster/gizle, kaydetme, sayfa yenilendikten sonra kalıcılık ve JavaScript hataları test edildi. Arayüz testi ayrı veritabanında örnek anahtarla yapıldı; mevcut gerçek anahtar değiştirilmedi.
+
+- Ana formda Yorum / Beğeni / Kaydet seçimi. Kaydet grubu varsayılanı sohbet ID'si `340282366841710301281157258447286771667` üzerinden belirlenir; kayıtlı son seçim önceliklidir.
+- Ayrı `/save-control` akışı: post/Reels, grup gönderen ID'sine göre katılımcılar, kendi gönderileri hariç; 22:30 kapanış, ertesi gün 18:00 kanıt sonu (Europe/Istanbul).
+- Normal medya ve generic_xma mesajlarının bütün görselleri alınır. Geçmiş tamamlanmazsa sonuç oluşturulmaz. Model hatası eksik kararına dönüşmez. Adımlar ve incelemeler SQLite key_value içinde yeni anahtarlarla saklanır.
+- Model: gemma-4-26b-a4b-it. Sunucuda `GEMINI_API_KEY` ortam değişkeni veya proje kökündeki Git dışında tutulan `.gemini-api-key` dosyası gerekir. Anahtar tarayıcıya veya rapora gönderilmez.
+- Benzer görsellerde yanlış eşleşme olabildiğinden sonuçlar onay bekleyen adaylardır. Görsellerin tamamı açılarak elle doğrulanabilir. Kanıt kaydetme zamanını ispatlamaz.
+- 207 backend testi geçti (10 yeni kaydet testi dahil). Gerçek 25 Eylül grup verisi: 5 referans, 5 katılımcı, 2 ilgili ekran ve önceki güne ait 3 ekran. Yeni HTTP analiz yoluyla 2 gerçek model çağrısı HTTP 200; kendi paylaşımı hariç 8/8 görünür referans için eşleşme adayı çıktı.
+- Playwright Chrome: ana formdan Kaydet akışına geçiş, grup seçimi, 20 yükümlülük kartında kendi paylaşımının bulunmaması, 390px ve 1280px genişliklerde taşma ve JavaScript hatası kontrolü geçti. Test veritabanı gerçek veritabanından ayrıdır.
+- Dağıtım öncesi son kontrol: 214 backend testi geçti; canlı SQLite yedeği 12 tablo ve 4.488 kayıt ile doğrulandı. Canlı veritabanı yüklenmez veya değiştirilmez. ZIP yedeği değiştirilmedi.

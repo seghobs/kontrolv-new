@@ -1698,3 +1698,5 @@ body .control-scope-dialog .scope-actions button{display:flex;align-items:center
 body .control-scope-dialog button.scope-edit{background:#c4956a08;color:#c8b59f;flex:1}body .control-scope-dialog button.scope-start{background:linear-gradient(125deg,#453321,#302419);color:#f0e3d3;border-color:#c4956a70;flex:1.5}
 body .control-scope-dialog button:hover{background:#493522;border-color:#c4956a90}body .control-scope-dialog button:focus-visible{outline:2px solid #c4956a80;outline-offset:3px}
 @media(max-width:480px){body dialog.control-scope-dialog{padding:22px;border-radius:20px}.control-scope-dialog h2{font-size:21px}.control-scope-dialog .scope-heading{gap:10px}.control-scope-dialog .scope-actions button{padding:12px 10px;font-size:12px}.scope-stats strong{font-size:21px}}
+
+body[data-control-mode="saves"] #saveIndividualPosts,body[data-control-mode="saves"] #groupPostsSection,body[data-control-mode="saves"] #sharersFilterWrapper,body[data-control-mode="saves"] #lowLikesFilterWrapper{display:none!important}

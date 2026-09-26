@@ -812,15 +812,18 @@ function isLikeControl() {
 
 function setControlType(mode, persist = true) {
     const likes = mode === 'likes';
-    document.getElementById('controlMode').value = likes ? 'likes' : 'comments';
+    const saves = mode === 'saves';
+    document.body.dataset.controlMode = saves ? 'saves' : likes ? 'likes' : 'comments';
+    document.getElementById('grup_uye').required = !saves;
+    document.getElementById('controlMode').value = saves ? 'saves' : likes ? 'likes' : 'comments';
     document.getElementById('checkLikesValue').value = likes ? 'on' : '';
-    for (const [id, active] of [['controlComments', !likes], ['controlLikes', likes]]) {
+    for (const [id, active] of [['controlComments', !likes && !saves], ['controlLikes', likes], ['controlSaves', saves]]) {
         const button = document.getElementById(id);
         button.classList.toggle('active', active);
         button.setAttribute('aria-pressed', String(active));
     }
-    document.getElementById('controlTypeGlider').style.transform = likes ? 'translateX(100%)' : 'translateX(0)';
-    document.getElementById('controlTypeHint').textContent = likes
+    document.getElementById('controlTypeGlider').style.transform = saves ? 'translateX(200%)' : likes ? 'translateX(100%)' : 'translateX(0)';
+    document.getElementById('controlTypeHint').textContent = saves ? 'Grup ve gün üzerinden kaydet kanıtları incelenir. Tek tek paylaşım seçmen gerekmez; kendi paylaşımın kapsam dışıdır.' : likes
         ? 'Paylaşımların beğenileri kontrol edilir. Yorumları kapalı paylaşımlar da seçilebilir.'
         : 'Paylaşımlara yapılan yorumlar kontrol edilir. Yorumları kapalı paylaşımlar dahil edilmez.';
     if (window.allFetchedPosts?.length) renderPosts();
@@ -1178,6 +1181,7 @@ function setCheckMode(mode) {
 function validateForm() {
     const submitBtn = document.getElementById("submitCheckBtn");
     if (!submitBtn) return;
+    if (document.getElementById("controlMode")?.value === "saves") { submitBtn.classList.remove("btn-disabled"); return; }
 
     let isValid = false;
     if (window._checkMode === "multi") {
@@ -1299,6 +1303,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const checkForm = document.getElementById("checkForm");
     if (checkForm) {
         checkForm.addEventListener("submit", (e) => {
+            if (document.getElementById("controlMode").value === "saves") {
+                e.preventDefault();
+                window.location.assign("/save-control?group=" + encodeURIComponent(document.getElementById("groupSelect")?.value || ""));
+                return;
+            }
             const multiInput = document.getElementById("post_link_multi");
             const singleInput = document.getElementById("post_link_single");
             
@@ -1783,6 +1792,7 @@ window.addEventListener('pageshow', (event) => {
         const form = document.getElementById('checkForm');
         if (!form) return;
         form.reset();
+        setControlType('comments', false);
         form.querySelectorAll('details').forEach(section => { section.open = false; });
         renderUserTags();
         validateForm();
@@ -1809,6 +1819,7 @@ async function restoreGroupControlPreferences(groupId) {
     sharers.disabled = likes.disabled = true;
     document.getElementById('controlComments').disabled = true;
     document.getElementById('controlLikes').disabled = true;
+    document.getElementById('controlSaves').disabled = true;
     try {
         await groupPreferenceWrites.get(groupId);
         const response = await fetch('/api/group_control_preferences/' + encodeURIComponent(groupId), {cache:'no-store'});
@@ -1820,6 +1831,7 @@ async function restoreGroupControlPreferences(groupId) {
         setControlType(data.control_mode || 'comments', false);
         document.getElementById('controlComments').disabled = false;
         document.getElementById('controlLikes').disabled = false;
+        document.getElementById('controlSaves').disabled = false;
         return true;
     } catch (error) {
         if (load === groupPreferenceLoad) showValidationToast(error.message || 'Grup tercihleri yüklenemedi. Grubu tekrar seçin.');

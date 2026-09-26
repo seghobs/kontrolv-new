@@ -46,6 +46,8 @@ def create_app():
     init_storage()
 
     app.register_blueprint(main_bp)
+    from app_core.save_control import bp as save_bp
+    app.register_blueprint(save_bp)
     from app_core.member_analysis import member_bp
     app.register_blueprint(member_bp)
     app.register_blueprint(admin_bp)

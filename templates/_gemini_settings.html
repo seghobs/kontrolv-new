@@ -1,0 +1,18 @@
+<details class="add-token-section" id="geminiSettings">
+    <summary class="section-header" style="cursor:pointer;list-style:none"><h2><i class="fas fa-wand-magic-sparkles"></i> Gemini API · Kaydet analizi</h2><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
+    <div class="section-body">
+        <p class="auto-form-label">Kaydet ekran görüntülerini analiz eden hizmetin anahtarını buradan yönetebilirsin.</p>
+        <p class="auto-form-label">Model: <strong>gemma-4-26b-a4b-it</strong></p>
+        <form id="geminiSettingsForm">
+            <label class="auto-form-label" for="geminiApiKey">Gemini API anahtarı</label>
+            <div class="auto-input-wrap"><span class="auto-input-prefix"><i class="fas fa-key"></i></span><input class="auto-input" id="geminiApiKey" type="password" autocomplete="off" spellcheck="false" maxlength="512" placeholder="API anahtarı yükleniyor…" disabled></div>
+            <div class="auto-action-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+                <button class="btn auto-btn-test" type="button" id="geminiReveal" aria-pressed="false" disabled><i class="fas fa-eye"></i> <span>Göster</span></button>
+                <button class="btn auto-btn-save" type="submit" id="geminiSave" disabled><i class="fas fa-save"></i> Kaydet</button>
+                <button class="btn auto-btn-test" type="button" id="geminiReload">Kayıtlı anahtarı getir</button>
+            </div>
+            <p id="geminiFeedback" role="status" aria-live="polite" style="margin-top:16px;overflow-wrap:anywhere"></p>
+        </form>
+    </div>
+</details>
+<script src="{{ url_for('static',filename='js/gemini_settings.js') }}" defer></script>
