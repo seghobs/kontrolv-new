@@ -4,6 +4,10 @@
   if (!root) return;
   const feedback = document.getElementById('saveFeedback');
   const run = root.dataset.run;
+  document.querySelectorAll('.save-result-row').forEach(link=>link.addEventListener('click',()=>{
+    const details=document.getElementById(link.hash.slice(1));
+    if(details?.matches('.save-member-details')) details.open=true;
+  }));
   document.getElementById('saveCopyMissing')?.addEventListener('click',async event=>{
     const button=event.currentTarget, feedback=document.getElementById('saveCopyFeedback');
     const fallback=document.getElementById('saveCopyFallback');

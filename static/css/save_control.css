@@ -3,3 +3,10 @@
 
 /* Shared textarea styling must not reveal the clipboard fallback. */
 #saveCopyFallback[hidden] { display: none !important; }
+
+#saveControl .save-member-details > summary { display:flex; padding:20px 24px; list-style:none; cursor:pointer; }
+#saveControl .save-member-details > summary::-webkit-details-marker { display:none; }
+.save-member-details:not([open]) > summary { border-bottom:0; }
+.save-member-chevron { color:#c49b70; transition:transform .18s; }
+.save-member-details[open] > summary .save-member-chevron { transform:rotate(180deg); }
+.save-member-details > summary:focus-visible { outline:2px solid #c49b70; outline-offset:-4px; border-radius:16px; }
