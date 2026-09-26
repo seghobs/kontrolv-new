@@ -57,8 +57,13 @@
     event.currentTarget.href += '&day='+encodeURIComponent(event.currentTarget.dataset.refreshDay);
   });
   document.getElementById('saveAnalyze')?.addEventListener('click',async event=>{
-    event.currentTarget.disabled=true;
+    const button=event.currentTarget;
+    button.disabled=true;
     try {
+      if(button.dataset.complete==='true'){
+        await post('/api/save-control/'+run+'/reanalyze');
+        button.dataset.complete='false';
+      }
       while(true){
         say('Görseller karşılaştırılıyor. Tamamlanan adımlar kaydedilir; sayfa kapansa da devam edebilirsin.');
         const result=await post('/api/save-control/'+run+'/step');

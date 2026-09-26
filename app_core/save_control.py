@@ -327,6 +327,22 @@ def report(run_id):
                            pending=datetime.now(TZ) <= datetime.fromisoformat(run['deadline']))
 
 
+@bp.post('/api/save-control/<run_id>/reanalyze')
+def reanalyze(run_id):
+    load(run_id)
+    key = 'save-run:'+run_id
+    with jobs.transaction() as conn:
+        run = json.loads(conn.execute('SELECT value FROM key_value WHERE key=?', (key,)).fetchone()['value'])
+        if run.get('lease', 0) > time.time():
+            return jsonify(error='Analiz devam ediyor. Biraz sonra tekrar deneyin.'), 409
+        # An interrupted pass resumes without discarding its completed steps.
+        if run['tasks'] and len(run['answers']) == len(run['tasks']):
+            run['previous_answers'] = run['answers']
+            run.update(answers={}, error=None, lease=0)
+            conn.execute('UPDATE key_value SET value=? WHERE key=?', (json.dumps(run), key))
+    return jsonify(ok=True)
+
+
 @bp.post('/api/save-control/<run_id>/step')
 def step(run_id):
     load(run_id)

@@ -160,6 +160,28 @@ class SaveControlTests(unittest.TestCase):
         self.assertEqual(saved['lease'],0)
         self.assertTrue(saved['error'])
 
+    def test_reanalyze_preserves_report_and_resumes_failed_pass(self):
+        run=fixture();run['tasks']=run['tasks'][:2]
+        answer={'is_collection':True,'results':[dict(id='P002',status='matched',row=1,column=1)]}
+        run['answers']={'0':answer,'1':answer};run['reviews']={'1:P002':'confirmed'}
+        write('save-run:'+run['id'],run);c=self.client();base='/api/save-control/'+run['id']
+        html=c.get('/save-control/'+run['id']).get_data(as_text=True)
+        self.assertIn('Yeniden analiz et',html);self.assertIn('Tamamlandı · 1/1',html)
+        self.assertEqual(c.post(base+'/reanalyze').status_code,200)
+        saved=read('save-run:'+run['id'],{})
+        self.assertEqual(saved['previous_answers'],run['answers'])
+        self.assertEqual(saved['reviews'],run['reviews']);self.assertEqual(saved['refs'],run['refs'])
+        with patch('app_core.save_control.compare',return_value=answer) as compare:
+            self.assertFalse(c.post(base+'/step').json['done'])
+            c.post(base+'/reanalyze')
+            self.assertEqual(len(read('save-run:'+run['id'],{})['answers']),1)
+            self.assertTrue(c.post(base+'/step').json['done'])
+            self.assertEqual(compare.call_count,2)
+        saved=read('save-run:'+run['id'],{});saved['lease']=99999999999
+        write('save-run:'+run['id'],saved)
+        self.assertEqual(c.post(base+'/reanalyze').status_code,409)
+        self.assertEqual(len(read('save-run:'+run['id'],{})['answers']),2)
+
     def test_step_resume_and_lease(self):
         run=fixture();run['tasks']=run['tasks'][:1];write('save-run:'+run['id'],run)
         answer=dict(is_collection=True,results=[dict(id='P002',status='matched',row=1,column=1)])
