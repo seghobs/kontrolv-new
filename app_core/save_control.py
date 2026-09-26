@@ -246,6 +246,19 @@ def load(run_id):
     return run
 
 
+def result_overview(members):
+    for member in members:
+        states = [f['state'] for f in member['findings']]
+        member['matched'] = sum(s in ('candidate', 'confirmed') for s in states)
+        member['not_visible'] = states.count('not_visible')
+        member['needs_review'] = sum(s not in ('candidate', 'confirmed', 'not_visible') for s in states)
+        member['all_visible'] = bool(states) and member['matched'] == len(states)
+    return dict(all_visible=sum(m['all_visible'] for m in members),
+                no_evidence=sum(not m['evidence'] for m in members),
+                not_visible=sum(m['not_visible'] for m in members),
+                review=sum(bool(m['evidence']) and not m['all_visible'] for m in members))
+
+
 @bp.get('/save-control')
 def page():
     from app_core.storage import _connect
@@ -278,7 +291,10 @@ def start():
 @bp.get('/save-control/<run_id>')
 def report(run_id):
     run = load(run_id)
-    return render_template('save_control.html', run=run, members=summary(run),
+    members = summary(run)
+    overview = result_overview(members)
+    members.sort(key=lambda m: (not bool(m['evidence']), m['username'].casefold()))
+    return render_template('save_control.html', run=run, members=members, overview=overview,
                            pending=datetime.now(TZ) <= datetime.fromisoformat(run['deadline']))
 
 

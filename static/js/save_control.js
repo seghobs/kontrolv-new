@@ -49,7 +49,7 @@
       while(true){
         say('Görseller karşılaştırılıyor. Tamamlanan adımlar kaydedilir; sayfa kapansa da devam edebilirsin.');
         const result=await post('/api/save-control/'+run+'/step');
-        if(result.done){location.reload();break;}
+        if(result.done){location.replace(location.pathname+'?results='+Date.now()+'#saveResults');break;}
         say(`${result.current}/${result.total} analiz adımı tamamlandı.`);
       }
     } catch(e){say(e.message);event.target.disabled=false;}

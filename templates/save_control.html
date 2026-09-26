@@ -5,6 +5,13 @@
 <div id="saveControl" data-run="{{ run.id if run else '' }}">
 <header class="member-hero"><span class="member-eyebrow"><i class="fas fa-bookmark"></i> KAYDET KONTROLÜ</span><h1>Paylaşımlar, kanıtlarıyla birlikte.</h1><p>O gün paylaşım yapan üyeler incelenir. Hikâyeler ve kişinin kendi paylaşımları kapsam dışıdır.</p></header>
 <p id="saveFeedback" role="status" aria-live="polite"></p>
+{% if run %}
+<section class="member-section" id="saveResults" tabindex="-1"><div class="member-section-head"><div><h2>{{ 'Sonuçlar hazır' if run.answers|length == run.tasks|length and run.tasks else 'Kontrol sonuçları' }}</h2><p>{{ run.group_name }} · {{ run.day }}{% if run.answers|length == run.tasks|length and run.tasks %} · Mevcut görüntülerin analizi tamamlandı.{% else %} · Analiz ilerledikçe sonuçlar burada görünür.{% endif %}</p></div></div><div class="member-section-body">
+<div class="member-summary"><div><span>TÜMÜ GÖRÜNEN ÜYE</span><strong>{{ overview.all_visible }}</strong></div><div><span>KANITI OLMAYAN ÜYE</span><strong>{{ overview.no_evidence }}</strong></div><div><span>GÖRÜNTÜDE BULUNAMAYAN</span><strong>{{ overview.not_visible }}</strong></div><div><span>İNCELEME / ANALİZ BEKLEYEN</span><strong>{{ overview.review }}</strong></div></div>
+<p>“Tümü görünen”, model eşleşmesi veya elle onaylanan görselleri ifade eder. Kanıtı olmayan üyeler kaydetmemiş sayılmaz. {% if pending %}18:00’e kadar yeni kanıt gelebilir.{% endif %}</p>
+<div class="save-result-list">{% for member in members %}<a href="#saveMember-{{ member.id }}" class="save-result-row"><strong>@{{ member.username }}</strong><span>{% if member.all_visible %}{{ member.matched }}/{{ member.findings|length }} paylaşım görünür{% elif not member.evidence %}{{ 'Kanıt bekleniyor' if pending else 'Kanıt yok · Doğrulanamadı' }}{% else %}{{ member.matched }}/{{ member.findings|length }} görünür · {{ member.not_visible }} bulunamadı · {{ member.needs_review }} inceleme / analiz{% endif %}</span><i class="fas fa-arrow-down" aria-hidden="true"></i></a>{% endfor %}</div>
+</div></section>
+{% endif %}
 {% if not run %}
 <section class="member-section"><div class="member-section-head"><div><h2>Grubunu ve gününü seç</h2><p>Yalnız paylaşım gününün 20:00’si ile ertesi günün 18:00’i arasında gönderilen ekran görüntüleri değerlendirilir. Paylaşım kapanışı 22:30’dur. Saatler Türkiye saatidir.</p></div></div>
 <form id="saveStart" class="member-section-body" data-group="{{ group }}">
@@ -22,7 +29,7 @@
 {% if run.error %}<p role="alert">{{ run.error }}</p>{% endif %}
 <p class="save-note">Model eşleşmesi bir adaydır. Görselleri karşılaştırarak onaylayabilirsin. “Görünmedi” sonucu, üyenin kesin kaydetmediği anlamına gelmez.</p></div></section>
 {% for member in members %}
-<section class="member-section"><div class="member-section-head"><div><h2>@{{ member.username }}</h2><p>{{ member.findings|length }} paylaşım · {{ member.evidence|length }} görüntü · Kendi paylaşımı hariç</p></div></div><div class="member-section-body">
+<section class="member-section" id="saveMember-{{ member.id }}"><div class="member-section-head"><div><h2>@{{ member.username }}</h2><p>{{ member.findings|length }} paylaşım · {{ member.evidence|length }} görüntü · Kendi paylaşımı hariç</p></div></div><div class="member-section-body">
 {% if not member.evidence %}<p>{{ 'Kanıt bekleniyor; telafi süresi devam ediyor.' if pending else 'Süresi doldu; ekran görüntüsü bulunamadı, doğrulanamadı.' }}</p>{% endif %}
 <div class="save-grid">{% for finding in member.findings %}<article class="save-post"><a href="{{ finding.url }}" target="_blank" rel="noopener"><img src="{{ finding.thumbnail }}" loading="lazy" referrerpolicy="no-referrer" alt="@{{ finding.username }} paylaşım referansı"><strong>@{{ finding.username }}</strong></a><span class="save-state {{ finding.state }}">{{ {'confirmed':'İnceleyerek doğrulandı','candidate':'Eşleşme adayı · Onay bekliyor','review':'İnceleme gerekli','not_visible':'Görüntülerde bulunamadı','waiting':'Kanıt / analiz bekleniyor','unverified':'Doğrulanamadı'}[finding.state] }}</span>
 {% for hit in finding.hits %}<p>{{ hit.reason }}{% if hit.status == 'matched' %} · {{ hit.row }}. satır, {{ hit.column }}. sütun{% endif %}</p>{% endfor %}

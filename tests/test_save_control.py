@@ -4,7 +4,7 @@ from unittest.mock import patch
 import test_jobs
 from app_core import create_app, storage
 from app_core.followup import read, write
-from app_core.save_control import prepare, window, screenshot_urls, summary, validate_answer, TZ
+from app_core.save_control import prepare, window, screenshot_urls, summary, validate_answer, result_overview, TZ
 
 GROUP = '340282366841710301281157258447286771667'
 
@@ -93,6 +93,27 @@ class SaveControlTests(unittest.TestCase):
         self.assertEqual(screenshot_urls({'item_type':'media','media':None}),[])
         run=fixture();run['answers']['0']={'is_collection':False,'results':[dict(id='P002',status='matched',row=1,column=1)]}
         self.assertNotEqual(summary(run)[0]['findings'][0]['state'],'candidate')
+
+    def test_completed_report_shows_results_above_waiting_members(self):
+        run=fixture()
+        run['answers']['0']={'is_collection':True,'results':[dict(id='P002',status='matched',row=1,column=1)]}
+        members=summary(run)
+        overview=result_overview(members)
+        self.assertEqual(overview,dict(all_visible=1,no_evidence=1,not_visible=0,review=0))
+        write('save-run:'+run['id'],run)
+        response=self.client().get('/save-control/'+run['id'])
+        self.assertEqual(response.status_code,200)
+        text=response.get_data(as_text=True)
+        self.assertLess(text.index('id="saveResults"'),text.index('id="saveAnalyze"'))
+        self.assertIn('1/1 paylaşım görünür',text)
+
+    def test_overview_never_counts_unknown_as_missing(self):
+        run=fixture()
+        run['answers']['0']={'is_collection':True,'results':[dict(id='P002',status='uncertain')]}
+        overview=result_overview(summary(run))
+        self.assertEqual(overview['not_visible'],0)
+        self.assertEqual(overview['review'],1)
+        self.assertEqual(overview['all_visible'],0)
 
     def test_invalid_model_answers_rejected(self):
         for result in [{},dict(is_collection=True,results=[]),dict(is_collection=True,results=[dict(id='wrong',status='matched')]),dict(is_collection=True,results=[dict(id='P001',status='matched',row=None,column=None)])]:
