@@ -105,7 +105,38 @@ class SaveControlTests(unittest.TestCase):
         self.assertEqual(response.status_code,200)
         text=response.get_data(as_text=True)
         self.assertLess(text.index('id="saveResults"'),text.index('id="saveAnalyze"'))
-        self.assertIn('1/1 paylaşım görünür',text)
+        self.assertIn('Tamamlandı · 1/1',text)
+
+    def test_copy_excludes_global_exempt_members_and_updates_immediately(self):
+        from app_core.storage import add_global_exemption, remove_global_exemption
+        run=fixture();run['tasks']=[];run['evidence']=[];write('save-run:'+run['id'],run)
+        c=self.client();url='/api/save-control/'+run['id']+'/missing-list'
+        self.assertEqual(c.get(url).json['text'],'@alice\n@bob')
+        add_global_exemption('bob')
+        self.assertEqual(c.get(url).json['text'],'@alice')
+        remove_global_exemption('bob')
+        self.assertEqual(c.get(url).json['text'],'@alice\n@bob')
+
+    def test_post_specific_exemption_does_not_exempt_other_obligations(self):
+        from app_core.storage import save_exemptions
+        run=fixture();run['tasks']=[]
+        save_exemptions({'https://www.instagram.com/p/DEF':['alice']})
+        members=summary(run);result_overview(members)
+        self.assertTrue(members[0]['exempt'])
+        self.assertFalse(members[1]['exempt'])
+        run['refs'].append(dict(run['refs'][1],id='P003',url='https://www.instagram.com/p/GHI/'))
+        members=summary(run);result_overview(members)
+        self.assertFalse(members[0]['exempt'])
+        self.assertEqual(members[0]['required_count'],1)
+
+    def test_incomplete_analysis_and_uncertain_matches_not_copied_as_missing(self):
+        run=fixture();write('save-run:'+run['id'],run);c=self.client()
+        url='/api/save-control/'+run['id']+'/missing-list'
+        self.assertEqual(c.get(url).status_code,409)
+        run['tasks']=run['tasks'][:1]
+        run['answers']['0']={'is_collection':True,'results':[dict(id='P002',status='uncertain')]}
+        write('save-run:'+run['id'],run)
+        self.assertEqual(c.get(url).json['text'],'@bob')
 
     def test_overview_never_counts_unknown_as_missing(self):
         run=fixture()

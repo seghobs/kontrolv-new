@@ -4,6 +4,19 @@
   if (!root) return;
   const feedback = document.getElementById('saveFeedback');
   const run = root.dataset.run;
+  document.getElementById('saveCopyMissing')?.addEventListener('click',async event=>{
+    const button=event.currentTarget, feedback=document.getElementById('saveCopyFeedback');
+    const fallback=document.getElementById('saveCopyFallback');
+    button.disabled=true;fallback.hidden=true;feedback.textContent='Güncel muafiyetlerle liste hazırlanıyor…';
+    try {
+      const response=await fetch('/api/save-control/'+run+'/missing-list',{cache:'no-store'});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||'Liste alınamadı.');
+      if(!data.count){feedback.textContent='Kopyalanacak eksik veya kanıt bekleyen üye yok.';return;}
+      try{await navigator.clipboard.writeText(data.text);feedback.textContent=data.count+' kullanıcı alt alta kopyalandı.';}
+      catch(_){fallback.value=data.text;fallback.hidden=false;fallback.focus();fallback.select();feedback.textContent='Otomatik kopyalama kullanılamıyor. Seçili listeyi kopyalayabilirsin.';}
+    }catch(e){feedback.textContent=e.message;}finally{button.disabled=false;}
+  });
   const say = text => { feedback.textContent = text; };
   async function post(url, data = {}) {
     const response = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});

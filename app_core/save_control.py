@@ -216,6 +216,14 @@ def validate_answer(result, ids):
 
 
 def summary(run):
+    from app_core.storage import load_global_exemptions, load_exemptions
+    from app_core.validators import normalize_username
+    from app_core.followup import link_key, rules_for
+    global_exempt = {normalize_username(e['username']) for e in load_global_exemptions()}
+    group_exempt = {normalize_username(u) for u in rules_for(run['thread_id'])['exempt']}
+    post_exempt = {}
+    for url, users in load_exemptions().items():
+        post_exempt.setdefault(link_key(url), set()).update(normalize_username(u) for u in users)
     pending = datetime.now(TZ) <= datetime.fromisoformat(run['deadline'])
     rows = []
     for uid, name in run['members'].items():
@@ -223,6 +231,12 @@ def summary(run):
         evidence = [e for e in run['evidence'] if e['sender_id'] == uid]
         findings = []
         for ref in required:
+            username = normalize_username(name)
+            reason = ('Genel muafiyet' if username in global_exempt else 'Grup muafiyeti' if username in group_exempt else
+                      'Paylaşım bazlı muafiyet' if username in post_exempt.get(link_key(ref['url']), set()) else None)
+            if reason:
+                findings.append(dict(ref, state='exempt', hits=[], exemption_reason=reason))
+                continue
             hits = []
             for index, task in enumerate(run['tasks']):
                 if task['evidence'] not in {e['id'] for e in evidence}:
@@ -248,15 +262,30 @@ def load(run_id):
 
 def result_overview(members):
     for member in members:
-        states = [f['state'] for f in member['findings']]
+        states = [f['state'] for f in member['findings'] if f['state'] != 'exempt']
+        member['required_count'] = len(states)
+        member['exempt'] = not states
         member['matched'] = sum(s in ('candidate', 'confirmed') for s in states)
         member['not_visible'] = states.count('not_visible')
         member['needs_review'] = sum(s not in ('candidate', 'confirmed', 'not_visible') for s in states)
         member['all_visible'] = bool(states) and member['matched'] == len(states)
     return dict(all_visible=sum(m['all_visible'] for m in members),
-                no_evidence=sum(not m['evidence'] for m in members),
+                no_evidence=sum(not m['evidence'] and not m['exempt'] for m in members),
                 not_visible=sum(m['not_visible'] for m in members),
-                review=sum(bool(m['evidence']) and not m['all_visible'] for m in members))
+                review=sum(bool(m['evidence']) and not m['all_visible'] and not m['exempt'] for m in members))
+
+
+@bp.get('/api/save-control/<run_id>/missing-list')
+def missing_list(run_id):
+    from app_core.validators import normalize_username
+    run = load(run_id)
+    if len(run['answers']) < len(run['tasks']):
+        return jsonify(error='Eksik listesini kopyalamadan önce mevcut görüntülerin analizini tamamlayın.'), 409
+    members = summary(run)
+    result_overview(members)
+    users = sorted({normalize_username(m['username']) for m in members
+                    if not m['exempt'] and not m['all_visible'] and (not m['evidence'] or m['not_visible'] > 0)})
+    return jsonify(text='\n'.join('@'+u for u in users), count=len(users))
 
 
 @bp.get('/save-control')
