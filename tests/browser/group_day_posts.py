@@ -20,7 +20,7 @@ with sync_playwright() as p:
         assert page.locator('#postSelect option').count() == 5
         assert '5 / 5' in page.locator('#postListSummary').inner_text()
         assert '5 hikâye' in page.locator('#postListSummary').inner_text()
-        page.evaluate("document.getElementById('lowLikesCheck').checked=true;renderPosts()")
+        page.evaluate("setControlType('likes');document.getElementById('lowLikesCheck').checked=true;renderPosts()")
         assert page.locator('#postSelect option').count() == 3
         assert '3 / 5' in page.locator('#postListSummary').inner_text()
         page.evaluate("document.getElementById('lowLikesCheck').checked=false;renderPosts()")

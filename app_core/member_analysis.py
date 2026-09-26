@@ -156,11 +156,14 @@ def run(payload, progress):
                             count=(details or {}).get('like_count')
                             if (details or {}).get('like_count_verified') and isinstance(count,int) and count>=0 and len(users)>=count: row['state']='missing'
                     else:
+                        details = await get_post_details_async(mid, token, session) or {}
+                        if details.get('comments_disabled') is True:
+                            row.update(state='excluded', reason='Yorumları kapalı')
+                            return row
                         response=await fetch_comment_usernames_async(mid,token,session) or {}
                         row['comments'], obtained_count, complete = member_comments(response, username)
                         if row['comments']:row['state']='present'
                         elif response.get('ok') and complete:
-                            details = await get_post_details_async(mid, token, session) or {}
                             count = details.get('comment_count')
                             if details.get('comment_count_verified') and type(count) is int and count >= 0 and obtained_count >= count:
                                 row['state'] = 'missing'

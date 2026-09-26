@@ -12,6 +12,13 @@ logger = logging.getLogger(__name__)
 MAX_COMMENT_PAGES = 50
 
 
+def comment_availability(media):
+    """Only Instagram's explicit global flag establishes closed comments."""
+    media = media if isinstance(media, dict) else {}
+    return {key: media.get(key) if type(media.get(key)) is bool else None
+            for key in ('comments_disabled', 'commenting_disabled_for_viewer')}
+
+
 def comments_cover_total(details, comments):
     count = (details or {}).get('comment_count')
     return bool((details or {}).get('comment_count_verified') and type(count) is int and count >= 0 and len(comments) >= count)
@@ -246,7 +253,7 @@ def get_post_details(media_id, token_record):
         "like_count_verified": False,
         "comment_count": 0,
         "comment_count_verified": False,
-        "comments_disabled": False,
+        **comment_availability(None),
         "caption": "",
         "profile_pic_url": "",
         "thumbnail_url": "",
@@ -289,7 +296,7 @@ def get_post_details(media_id, token_record):
                 res["like_count_verified"] = isinstance(item.get("like_count"), int)
                 res["comment_count"] = item.get("comment_count", 0)
                 res["comment_count_verified"] = type(item.get("comment_count")) is int
-                res["comments_disabled"] = item.get("comments_disabled", False)
+                res.update(comment_availability(item))
                 caption = item.get("caption") or {}
                 res["caption"] = caption.get("text", "")
                 
@@ -1081,7 +1088,6 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
             
             like_count = media.get("like_count", -1)
             comment_count = media.get("comment_count", -1)
-            comments_disabled = media.get("comments_disabled", False)
             
             # Yüklenme tarihinin bugün veya dün olup olmadığını kontrol et (Istanbul saatiyle)
             today_date = datetime.datetime.now(gmt3).date()
@@ -1118,7 +1124,7 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
                 "username": sender_username,
                 "like_count": like_count,
                 "comment_count": comment_count,
-                "comments_disabled": comments_disabled,
+                **comment_availability(media),
                 "taken_at": taken_at,
                 "is_recent": is_recent,
                 "thumbnail_url": thumbnail_url,
@@ -1181,7 +1187,7 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
                         "username": tp["sender_username"],
                         "like_count": -1,
                         "comment_count": -1,
-                        "comments_disabled": False,
+                        **comment_availability(None),
                         "taken_at": timestamp_sec,
                         "is_recent": True,
                         "media_type": tp["media_type"],
@@ -1349,6 +1355,7 @@ async def get_post_details_async(media_id, token_record, session: aiohttp.Client
     device_id = token_record.get("device_id", "")
     
     res = {
+        **comment_availability(None),
         "sender": None,
         "owner_fullname": None,
         "like_count": 0,
@@ -1398,6 +1405,7 @@ async def get_post_details_async(media_id, token_record, session: aiohttp.Client
                 items = data.get("items", [])
                 if items:
                     item = items[0]
+                    res.update(comment_availability(item))
                     user = item.get("user", {})
                     res["sender"] = user.get("username")
                     res["owner_fullname"] = user.get("full_name")

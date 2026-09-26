@@ -231,6 +231,7 @@ function loadGroups() {
                             hiddenSelect.value = g.id;
                         }
                         currentThreadId = g.id;
+                        document.getElementById('homeOptions').open = true;
                         window.currentGroupMemberCount = g.member_count;
                         const threadIdInput = document.getElementById('thread_id_input');
                         if (threadIdInput) {
@@ -296,9 +297,13 @@ function loadGroupMembers(threadIdFromDropdown) {
     if (!threadId) {
         postsSection.style.display = "none";
         const filterWrapper = document.getElementById("sharersFilterWrapper");
-        if (filterWrapper) filterWrapper.style.display = "none";
+        if (filterWrapper) { filterWrapper.style.display = "flex"; filterWrapper.style.opacity = "1"; filterWrapper.style.pointerEvents = "auto"; }
         const likesFilterWrapper = document.getElementById("lowLikesFilterWrapper");
-        if (likesFilterWrapper) likesFilterWrapper.style.display = "none";
+        if (likesFilterWrapper) { likesFilterWrapper.style.display = "flex"; likesFilterWrapper.style.opacity = "1"; likesFilterWrapper.style.pointerEvents = "auto"; }
+        for (const id of ['onlySharersCheck','lowLikesCheck','controlComments','controlLikes']) {
+            const element = document.getElementById(id);
+            if (element) element.disabled = false;
+        }
         return;
     }
     
@@ -641,7 +646,7 @@ function addPostLink() {
         
         const lowLikesChecked = document.getElementById("lowLikesCheck")?.checked;
         const dateFilter = document.getElementById("dateFilter")?.value || "yesterday";
-        if (currentThreadId && !lowLikesChecked && (dateFilter === "yesterday" || dateFilter === "today") && window._checkMode === "single") {
+        if (currentThreadId && !isLikeControl() && (dateFilter === "yesterday" || dateFilter === "today") && window._checkMode === "single") {
             const todayStr = getIstanbulDateStr();
             saveSelectedPostToDb(currentThreadId, todayStr, link);
         }
@@ -801,8 +806,31 @@ function checkAndEnableToggles() {
     }
 }
 
+function isLikeControl() {
+    return document.getElementById('controlMode')?.value === 'likes';
+}
+
+function setControlType(mode, persist = true) {
+    const likes = mode === 'likes';
+    document.getElementById('controlMode').value = likes ? 'likes' : 'comments';
+    document.getElementById('checkLikesValue').value = likes ? 'on' : '';
+    for (const [id, active] of [['controlComments', !likes], ['controlLikes', likes]]) {
+        const button = document.getElementById(id);
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', String(active));
+    }
+    document.getElementById('controlTypeGlider').style.transform = likes ? 'translateX(100%)' : 'translateX(0)';
+    document.getElementById('controlTypeHint').textContent = likes
+        ? 'Paylaşımların beğenileri kontrol edilir. Yorumları kapalı paylaşımlar da seçilebilir.'
+        : 'Paylaşımlara yapılan yorumlar kontrol edilir. Yorumları kapalı paylaşımlar dahil edilmez.';
+    if (window.allFetchedPosts?.length) renderPosts();
+    else validateForm();
+    if (persist) saveGroupControlPreferences();
+}
+
 function handleLowLikesCheckbox() {
     saveGroupControlPreferences();
+    if (!currentThreadId) { validateForm(); return; }
     renderPosts();
 }
 
@@ -894,9 +922,13 @@ function renderPosts() {
     const lowLikesChecked = document.getElementById("lowLikesCheck")?.checked;
     
     let postsToRender = [...(window.allFetchedPosts || [])];
+    const closedCommentPosts = postsToRender.filter(p => p.comments_disabled === true);
+    if (!isLikeControl()) {
+        postsToRender = postsToRender.filter(p => p.comments_disabled !== true);
+    }
     
     // 1. '90 altı' filtresi aktifse
-    if (lowLikesChecked) {
+    if (lowLikesChecked && isLikeControl()) {
         postsToRender = postsToRender.filter(p => Number.isFinite(p.like_count) && p.like_count >= 0 && p.like_count <= 90);
     }
     
@@ -940,6 +972,7 @@ function renderPosts() {
         }
         const total = (window.allFetchedPosts || []).length;
         summary.textContent = `${postsToRender.length} / ${total} post ve Reels gösteriliyor.` +
+            (!isLikeControl() && closedCommentPosts.length ? ` ${closedCommentPosts.length} paylaşımın yorumları kapalı; yorum kontrolüne dahil edilmedi.` : '') +
             (window.groupStoryCount ? ` ${window.groupStoryCount} hikâye bu listeye dahil değil.` : '') +
             (postsToRender.length < total ? ' Aktif filtreler listeyi daraltıyor.' : '');
     }
@@ -967,7 +1000,8 @@ function renderPosts() {
                 ? `<img src="${p.thumbnail_url}" class="post-dropdown-thumb" referrerpolicy="no-referrer" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='inline-flex';"><span class="icon" style="display:none;">${icon}</span>`
                 : `<span class="icon">${icon}</span>`;
                 
-            div.innerHTML = `${thumbHtml} <span class="fw-semibold">${p.username}</span>${likesHtml} <span style="opacity: 0.6; font-size: 11px; margin-left: auto;">${p.date}</span>`;
+            const closedHtml = p.comments_disabled === true ? ' <span class="small" style="color:var(--accent-caramel)">Yorumlara kapalı</span>' : '';
+            div.innerHTML = `${thumbHtml} <span class="fw-semibold">${p.username}</span>${likesHtml}${closedHtml} <span style="opacity: 0.6; font-size: 11px; margin-left: auto;">${p.date}</span>`;
             
             div.onclick = function(e) {
                 if (e) {
@@ -1249,7 +1283,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const link = singleInput.value.trim();
             const lowLikesChecked = document.getElementById("lowLikesCheck")?.checked;
             const dateFilter = document.getElementById("dateFilter")?.value || "yesterday";
-            if (currentThreadId && link && !lowLikesChecked && (dateFilter === "yesterday" || dateFilter === "today") && window._checkMode === "single") {
+            if (currentThreadId && link && !isLikeControl() && (dateFilter === "yesterday" || dateFilter === "today") && window._checkMode === "single") {
                 const todayStr = getIstanbulDateStr();
                 saveSelectedPostToDb(currentThreadId, todayStr, link);
             }
@@ -1487,6 +1521,7 @@ function fetchSharers(silent = false) {
 
 function handleSharersCheckbox() {
     saveGroupControlPreferences();
+    if (!currentThreadId) return;
     const isChecked = document.getElementById("onlySharersCheck")?.checked;
     if (isChecked) {
         fetchSharers();
@@ -1612,7 +1647,7 @@ function handleAutoSelect(threadId) {
     const lowLikesChecked = document.getElementById("lowLikesCheck")?.checked;
     const dateFilter = document.getElementById("dateFilter")?.value || "yesterday";
     
-    if (lowLikesChecked || (dateFilter !== "yesterday" && dateFilter !== "today") || window._checkMode !== "single") {
+    if (isLikeControl() || (dateFilter !== "yesterday" && dateFilter !== "today") || window._checkMode !== "single") {
         return;
     }
     
@@ -1621,13 +1656,13 @@ function handleAutoSelect(threadId) {
     fetch(`/api/get_selected_post?thread_id=${threadId}&date=${todayStr}`)
         .then(r => r.json())
         .then(res => {
-            if (document.getElementById("lowLikesCheck")?.checked ||
+            if (isLikeControl() ||
                 window._checkMode !== "single" || currentThreadId !== threadId ||
                 (document.getElementById("dateFilter")?.value || "yesterday") !== dateFilter) return;
             let matchedPostUrl = null;
             if (res.success && res.post_url) {
                 const chosenPost = (window.allFetchedPosts || []).find(p => p.url === res.post_url);
-                if (chosenPost) {
+                if (chosenPost && chosenPost.comments_disabled !== true) {
                     const isRecent = chosenPost.is_recent === true;
                     if (isRecent) {
                         matchedPostUrl = res.post_url;
@@ -1772,6 +1807,8 @@ async function restoreGroupControlPreferences(groupId) {
     renderUserTags();
     sharers.checked = likes.checked = false;
     sharers.disabled = likes.disabled = true;
+    document.getElementById('controlComments').disabled = true;
+    document.getElementById('controlLikes').disabled = true;
     try {
         await groupPreferenceWrites.get(groupId);
         const response = await fetch('/api/group_control_preferences/' + encodeURIComponent(groupId), {cache:'no-store'});
@@ -1780,6 +1817,9 @@ async function restoreGroupControlPreferences(groupId) {
         if (!response.ok || !data.ok) throw new Error(data.error || 'Grup tercihleri yüklenemedi.');
         sharers.checked = data.preferences.only_sharers === true;
         likes.checked = data.preferences.low_likes === true;
+        setControlType(data.control_mode || 'comments', false);
+        document.getElementById('controlComments').disabled = false;
+        document.getElementById('controlLikes').disabled = false;
         return true;
     } catch (error) {
         if (load === groupPreferenceLoad) showValidationToast(error.message || 'Grup tercihleri yüklenemedi. Grubu tekrar seçin.');
@@ -1790,7 +1830,8 @@ function saveGroupControlPreferences() {
     const groupId = currentThreadId;
     if (!groupId) return;
     const values = {only_sharers:document.getElementById('onlySharersCheck').checked,
-                    low_likes:document.getElementById('lowLikesCheck').checked};
+                    low_likes:document.getElementById('lowLikesCheck').checked,
+                    control_mode:document.getElementById('controlMode').value};
     // Serialize rapid changes so an older response cannot overwrite the last click.
     const pending = (groupPreferenceWrites.get(groupId) || Promise.resolve()).catch(() => {}).then(async () => {
         const response = await fetch('/api/group_control_preferences/' + encodeURIComponent(groupId), {

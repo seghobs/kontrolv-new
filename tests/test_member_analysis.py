@@ -48,6 +48,11 @@ class MemberAnalysisTests(unittest.TestCase):
         self.assertEqual(row['state'],'present');self.assertEqual(row['comments'],['my comment'])
         self.assertEqual(self.scan(False,{'ok':True,'comments':[]},{'comment_count':0,'comment_count_verified':True})['state'],'missing')
         self.assertEqual(self.scan(False,{'ok':False,'comments':[]})['state'],'unknown')
+    def test_closed_comments_excluded_and_likes_unaffected(self):
+        details={'comments_disabled':True,'comment_count':0,'comment_count_verified':True}
+        row=self.scan(False,{'ok':True,'comments':[]},details)
+        self.assertEqual((row['state'],row['reason']),('excluded','Yorumları kapalı'))
+        self.assertEqual(self.scan(True,{'ok':True,'usernames':['alice']},details)['state'],'present')
     def test_high_like_count_is_checked_and_partial_lists_are_unknown(self):
         self.assertEqual(self.scan(True,{'ok':True,'usernames':['alice']},{'like_count':200})['state'],'present')
         self.assertEqual(self.scan(True,{'ok':True,'usernames':['bob']},{'like_count':200,'like_count_verified':True})['state'],'unknown')

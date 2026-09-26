@@ -199,7 +199,11 @@
                         </div>
 
                         <div id="eksiklerSection-{{ loop.index }}" class="result-section-content collapsed">
-                            {% if item.error %}
+                            {% if item.skipped_reason %}
+                            <div class="alert" role="status" style="color:var(--accent-caramel);border:1px solid var(--accent-caramel);border-radius:12px;">
+                                {{ item.skipped_reason }} · Bu paylaşım kontrol kapsamına alınmadı; üyelere eksik yazılmadı.
+                            </div>
+                            {% elif item.error %}
                             <div class="alert alert-danger mb-0" style="background: rgba(196, 149, 106, 0.15); border: 1px solid rgba(196, 149, 106, 0.35); color: #f5ede4; padding: 15px; border-radius: 8px;">
                                 <i class="fas fa-exclamation-triangle me-2" style="color: var(--accent-caramel);"></i>{{ item.error }}
                             </div>

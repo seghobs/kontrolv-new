@@ -23,13 +23,14 @@ function element() {
 const ids = Object.fromEntries(['postSelect', 'post_link_single', 'post_link_multi', 'checkForm', 'lowLikesCheck', 'grup_uye'].map(id => [id, element()]));
 const dropdownText = element(), dropdownOptions = element();
 const context = {
+    currentThreadId: 'fixture',
     window: {_checkMode: 'single', postFilterSettings: {}},
     document: {
         getElementById: id => ids[id],
         querySelector: selector => selector.endsWith('.dropdown-text') ? dropdownText : dropdownOptions,
         createElement: () => element(),
     },
-    Event: class {}, validateForm() {}, saveGroupControlPreferences() {},
+    isLikeControl: () => true, Event: class {}, validateForm() {}, saveGroupControlPreferences() {},
 };
 vm.createContext(context);
 vm.runInContext(['handleLowLikesCheckbox', 'renderPosts', 'selectPostInUI', 'addAllPosts'].map(extract).join('\n'), context);

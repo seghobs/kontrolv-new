@@ -9,7 +9,19 @@ import test_jobs
 class AuditRegressions(unittest.TestCase):
     setUp = test_jobs.JobTests.setUp
 
-    def control(self, *, likes=False, details=None, likers=None, previous=None, sync=False, link=None):
+    def test_closed_comments_skipped_but_likes_still_checked(self):
+        for sync in (False, True):
+            details = {'comments_disabled': True, 'comment_count': 0,
+                       'comment_count_verified': True, 'like_count': 2, 'like_count_verified': True}
+            result, comments, _ = self.control(details=details, sync=sync)
+            self.assertEqual(comments, 0)
+            self.assertEqual(result['links'][0]['skipped_reason'], 'Yorumları kapalı')
+            self.assertEqual(result['links'][0]['eksikler'], [])
+            self.assertEqual(result['links'][0]['commenters'], [])
+            result, _, _ = self.control(details=details, likes=True, likers={'alice', 'bob'}, sync=sync)
+            self.assertEqual(set(result['links'][0]['commenters']), {'alice', 'bob'})
+
+    def control(self, *, likes=False, details=None, likers=None, previous=None, sync=False, link=None, low_likes=True):
         with ExitStack() as stack:
             stack.enter_context(patch.object(main, 'get_working_active_token', return_value={'token':'test'}))
             stack.enter_context(patch.object(main, 'get_global_exempted_users', return_value=set()))
@@ -22,7 +34,7 @@ class AuditRegressions(unittest.TestCase):
             stack.enter_context(patch.object(main, 'get_post_details',return_value=details or {}))
             fallback=stack.enter_context(patch.object(main,'fetch_likers_with_failover',return_value={'ok':True,'usernames':likers or set()}))
             result=main.run_manual_control(link or 'https://www.instagram.com/p/ABC','alice bob','',[],likes,
-                only_missing=previous is not None,prev_result=previous)
+                only_missing=previous is not None,prev_result=previous,low_likes=low_likes)
             return result, comments.call_count, fallback.call_count
 
     def test_partial_likers_cannot_mark_absent_members_missing(self):
@@ -33,6 +45,13 @@ class AuditRegressions(unittest.TestCase):
                     self.assertTrue(result['links'][0]['error'])
                     self.assertEqual(result['links'][0]['eksikler'],[])
                     self.assertEqual(result['all_commented'],[])
+
+    def test_likes_without_optional_limit_checks_high_like_posts(self):
+        for sync in (False, True):
+            result, _, _ = self.control(likes=True, low_likes=False, sync=sync,
+                details={'like_count':120,'like_count_verified':True}, likers={'alice','bob'})
+            self.assertFalse(result['links'][0]['error'])
+            self.assertEqual(set(result['links'][0]['commenters']), {'alice','bob'})
 
     def test_partial_positive_likers_are_valid_when_everyone_is_found(self):
         result,_,_=self.control(likes=True,details={'like_count':10,'like_count_verified':True},likers={'alice','bob'})

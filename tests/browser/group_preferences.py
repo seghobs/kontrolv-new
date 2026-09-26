@@ -28,6 +28,13 @@ with sync_playwright() as p:
  page.evaluate("for(let i=0;i<6;i++){document.getElementById('lowLikesCheck').checked=i%2===0;handleLowLikesCheckbox()}")
  saved(page,a,False,False);page.close()
  page=setup();select(page,'Group A');assert not page.locator('#lowLikesCheck').is_checked();assert not page.locator('#onlySharersCheck').is_checked()
+ page.locator('#controlLikes').click();page.evaluate('(group)=>groupPreferenceWrites.get(group)',a)
+ assert page.request.get(BASE+'/api/group_control_preferences/'+a).json()['control_mode']=='likes'
+ select(page,'Group B');assert page.locator('#controlMode').input_value()=='comments'
+ select(page,'Group A');assert page.locator('#controlMode').input_value()=='likes'
+ page.close();page=setup();select(page,'Group A');assert page.locator('#controlMode').input_value()=='likes'
+ page.locator('#controlComments').click();page.evaluate('(group)=>groupPreferenceWrites.get(group)',a)
+ select(page,'Group B');select(page,'Group A');assert page.locator('#controlMode').input_value()=='comments'
  # A delayed preference response for A must not alter B's UI.
  page.route('**/api/group_control_preferences/'+a,lambda r:r.fulfill(json={'ok':True,'preferences':{'only_sharers':True,'low_likes':True}}))
  page.evaluate("""() => { const original=window.fetch;window.fetch=async (...args)=>{const response=await original(...args);if(String(args[0]).endsWith('/"""+a+"""'))await new Promise(r=>setTimeout(r,350));return response;};document.querySelector('#groupDropdown .dropdown-options').children[0].click();document.querySelector('#groupDropdown .dropdown-options').children[1].click();}""")

@@ -13,6 +13,27 @@ class GroupPreferenceTests(unittest.TestCase):
   self.assertTrue(c.post('/api/group_control_preferences/a',json=dict(only_sharers=True,low_likes=True)).json['ok'])
   self.assertEqual(c.get('/api/group_control_preferences/b').json['preferences'],off)
   self.assertEqual(self.client().get('/api/group_control_preferences/a').json['preferences'],dict(only_sharers=True,low_likes=True))
+ def test_six_group_modes_and_last_override(self):
+  names=[('INFLUENCER VİBES (27)','comments'),('İNFLUENCER VİBES LİKE (9)','likes'),('🎀 ZİRVE YORUM BEĞENİ 2 🎀 (99)','comments'),('🩷 ZİRVE BEĞENİ GRUBU 2 🩷 (75)','likes'),('🧿 ZİRVE BEĞENİ GRUBU 1 🧿 (80)','likes'),('💜ZİRVE YORUM BEĞENİ 1💜 (75)','comments')]
+  ids=['340282366841710301281152316007215030727','340282366841710301281152285221828141838','340282366841710301281176651461280340717','340282366841710301281160514595477770576','340282366841710301281159538622628703126','340282366841710301281156982018321100464']
+  storage.cache_group_names([{'id':ids[i],'name':name} for i,(name,_) in enumerate(names)])
+  c=self.client()
+  for i,(_,mode) in enumerate(names):
+   url='/api/group_control_preferences/'+ids[i]
+   self.assertEqual(c.get(url).json['control_mode'],mode)
+   storage.cache_group_names([{'id':ids[i],'name':'Tamamen farklı yeni isim'}])
+   self.assertEqual(c.get(url).json['control_mode'],mode)
+   changed='likes' if mode=='comments' else 'comments'
+   c.post(url,json=dict(only_sharers=False,low_likes=False,control_mode=changed))
+   self.assertEqual(self.client().get(url).json['control_mode'],changed)
+   storage.cache_group_names([{'id':ids[i],'name':'Bir kez daha değişti'}])
+   self.assertEqual(c.get(url).json['control_mode'],changed)
+   c.post(url,json=dict(only_sharers=True,low_likes=False))
+   self.assertEqual(c.get(url).json['control_mode'],changed)
+   self.assertEqual(c.post(url,json=dict(only_sharers=False,low_likes=False,control_mode='invalid')).status_code,400)
+   self.assertEqual(c.get(url).json['control_mode'],changed)
+  storage.cache_group_names([{'id':'unrelated','name':'İNFLUENCER VİBES LİKE'}])
+  self.assertEqual(c.get('/api/group_control_preferences/unrelated').json['control_mode'],'comments')
  def test_uncheck_is_persisted_and_independent_flags(self):
   c=self.client();u='/api/group_control_preferences/a'
   for value in [dict(only_sharers=True,low_likes=False),dict(only_sharers=False,low_likes=True),dict(only_sharers=False,low_likes=False)]:

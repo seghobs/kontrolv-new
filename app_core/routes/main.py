@@ -193,7 +193,7 @@ def clean_word_count(text):
     return len(words)
 
 
-def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes, only_missing=False, prev_result=None, progress_callback=None, unknown_only=False, checkpoints=None, save_checkpoint=None, shared_dates=None):
+def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes, only_missing=False, prev_result=None, progress_callback=None, unknown_only=False, checkpoints=None, save_checkpoint=None, shared_dates=None, low_likes=True):
     active_working_token = get_working_active_token()
     if not active_working_token:
         raise ValueError("Tum hesaplar cikis yapmis gorunuyor. Lutfen admin panelden gecerli bir token girin.")
@@ -278,6 +278,12 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
                 
                 post_details = await get_post_details_async(media_id, working_token, session) or {}
                 post_sender = post_senders.get(link_single) or (normalize_username(post_details.get("sender")) if post_details.get("sender") else None)
+                if not check_likes and post_details.get('comments_disabled') is True:
+                    tracker['done'] += 1
+                    if progress_callback:
+                        progress_callback(tracker['done'], tracker['total'], 'Yorumları kapalı paylaşım kapsam dışında bırakıldı.')
+                    return dict(post_details, post_link=link_single, sender=post_sender,
+                                eksikler=[], commenters=[], comments_list=[], skipped_reason='Yorumları kapalı')
                 
                 izinli_uyeler = exemptions_by_link[link_single]
                 all_exempted_for_link = izinli_uyeler | global_exempted
@@ -289,7 +295,7 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
                 
                 if check_likes:
                     like_count = post_details.get("like_count", 0)
-                    if like_count > 90:
+                    if low_likes and like_count > 90:
                         tracker["done"] += 1
                         if progress_callback:
                             progress_callback(tracker["done"], tracker["total"], f"Gönderi {tracker['done']}/{tracker['total']} tamamlandı")
@@ -392,11 +398,15 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
             if not media_id: continue
             post_details = get_post_details(media_id, working_token) or {}
             post_sender = post_senders.get(link_single) or (normalize_username(post_details.get("sender")) if post_details.get("sender") else None)
+            if not check_likes and post_details.get('comments_disabled') is True:
+                fetched_results.append(dict(post_details, post_link=link_single, sender=post_sender,
+                                            eksikler=[], commenters=[], comments_list=[], skipped_reason='Yorumları kapalı'))
+                continue
             izinli_uyeler = exemptions_by_link[link_single]
             all_exempted_for_link = izinli_uyeler | global_exempted
             if post_sender and rules['skip_owner']: all_exempted_for_link.add(post_sender)
             if check_likes:
-                if post_details.get('like_count', 0) > 90:
+                if low_likes and post_details.get('like_count', 0) > 90:
                     fetched_results.append(dict(post_details, post_link=link_single, sender=post_sender,
                         eksikler=[], commenters=[], comments_list=[],
                         error="Bu gönderi 90'dan fazla beğeni aldığı için kontrol edilmedi."))
@@ -564,7 +574,7 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
             "duplicate_comment_users": list(duplicate_comment_users),
             "invalid_comment_users": list(invalid_comment_users),
             "user_comments": user_comments_map,
-            "check_likes": check_likes
+            "check_likes": check_likes, "low_likes": low_likes
         }
         from app_core.storage import set_cached_run_result
         set_cached_run_result(thread_id, today_str, cache_data)
@@ -578,7 +588,7 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
         "invalid_comment_users": list(invalid_comment_users),
         "user_comments": user_comments_map,
         "thread_id": thread_id,
-        "check_likes": check_likes
+        "check_likes": check_likes, "low_likes": low_likes
     }
 
 
@@ -717,7 +727,9 @@ def index():
         post_senders_raw = request.form.getlist("post_senders")
         check_likes = request.form.get("check_likes") == "on"
         policy = rules_for(thread_id)
-        if policy['mode'] != 'selected': check_likes = policy['mode'] == 'likes'
+        mode = request.form.get('control_mode')
+        if mode in ('comments', 'likes'): check_likes = mode == 'likes'
+        elif policy['mode'] != 'selected': check_likes = policy['mode'] == 'likes'
 
         # Post kodunu ayıkla
         import re
@@ -732,7 +744,8 @@ def index():
             "grup_uye": grup_uye,
             "thread_id": thread_id,
             "post_senders_raw": post_senders_raw,
-            "check_likes": check_likes
+            "check_likes": check_likes,
+            "low_likes": request.form.get("low_likes") == "on" if mode in ("comments", "likes") else check_likes
         }
         from app_core.jobs import enqueue
         job_id = enqueue('manual', inputs)
@@ -1057,6 +1070,7 @@ def get_post_thumbnail_api():
     return jsonify({
         "ok": True,
         "thumbnail_url": details.get("thumbnail_url", ""),
+        "comments_disabled": details.get("comments_disabled"),
         "profile_pic_url": details.get("profile_pic_url", ""),
         "is_video": details.get("is_video", False),
         "video_url": details.get("video_url", "")
@@ -1120,6 +1134,16 @@ def debug_db(post_code):
 
 
 
+GROUP_CONTROL_DEFAULTS = {
+    '340282366841710301281152316007215030727': 'comments',
+    '340282366841710301281152285221828141838': 'likes',
+    '340282366841710301281176651461280340717': 'comments',
+    '340282366841710301281160514595477770576': 'likes',
+    '340282366841710301281159538622628703126': 'likes',
+    '340282366841710301281156982018321100464': 'comments',
+}
+
+
 @main_bp.route('/api/group_control_preferences/<thread_id>', methods=['GET', 'POST'])
 def group_control_preferences(thread_id):
     if not thread_id or len(thread_id) > 200 or not all(c.isalnum() or c in '_-' for c in thread_id):
@@ -1130,14 +1154,23 @@ def group_control_preferences(thread_id):
     try:
         if request.method == 'POST':
             data = request.get_json(silent=True)
-            if not isinstance(data, dict) or set(data) != set(fields) or any(type(data[f]) is not bool for f in fields):
+            if not isinstance(data, dict) or set(data) not in (set(fields), set(fields) | {'control_mode'}) or any(type(data[f]) is not bool for f in fields) or ('control_mode' in data and data['control_mode'] not in ('comments','likes')):
                 return jsonify(ok=False, error='İki seçenek de açık veya kapalı olarak gönderilmeli.'), 400
+            # Legacy checkbox-only clients must not erase the saved control type.
+            if 'control_mode' not in data:
+                previous = conn.execute('SELECT value FROM key_value WHERE key=?', (key,)).fetchone()
+                previous = json.loads(previous['value']) if previous else {}
+                if previous.get('control_mode') in ('comments','likes'):
+                    data['control_mode'] = previous['control_mode']
             conn.execute('INSERT OR REPLACE INTO key_value (key,value) VALUES (?,?)', (key, json.dumps(data)))
             conn.commit()
         else:
             row = conn.execute('SELECT value FROM key_value WHERE key=?', (key,)).fetchone()
             data = json.loads(row['value']) if row else {}
-        return jsonify(ok=True, preferences={f: data.get(f) is True for f in fields})
+        mode = data.get('control_mode')
+        if mode not in ('comments','likes'):
+            mode = GROUP_CONTROL_DEFAULTS.get(thread_id, 'comments')
+        return jsonify(ok=True, preferences={f: data.get(f) is True for f in fields}, control_mode=mode)
     except Exception:
         logger.exception('Grup kontrol tercihleri kaydedilemedi/okunamadı')
         return jsonify(ok=False, error='Grup tercihleri alınamadı veya kaydedilemedi. Tekrar deneyin.'), 503

@@ -66,7 +66,7 @@
                     <form id="checkForm" method="post" action="/">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="thread_id" id="thread_id_input">
-                        <details class="home-options" id="homeOptions"><summary><span><i class="fas fa-sliders" aria-hidden="true"></i> Ek seçenekler</span><span class="home-options-hint">Filtreler ve bağlantı araçları <i class="fas fa-chevron-down" aria-hidden="true"></i></span></summary><div class="home-options-body">                            <label id="sharersFilterWrapper" class="modern-checkbox-wrapper mb-3" for="onlySharersCheck" style="display: none;">
+                        <details class="home-options" id="homeOptions"><summary><span><i class="fas fa-sliders" aria-hidden="true"></i> Ek seçenekler</span><span class="home-options-hint">Filtreler ve bağlantı araçları <i class="fas fa-chevron-down" aria-hidden="true"></i></span></summary><div class="home-options-body">                            <label id="sharersFilterWrapper" class="modern-checkbox-wrapper mb-3" for="onlySharersCheck">
                                 <div class="checkbox-content">
                                     <div class="icon-box">
                                          <i class="fas fa-filter"></i>
@@ -83,7 +83,7 @@
                             </label>
 
                             <!-- Yeni Filtre: Beğenisi 90 ve altı olanlar -->
-                            <label id="lowLikesFilterWrapper" class="modern-checkbox-wrapper mb-3" for="lowLikesCheck" style="display: none;">
+                            <label id="lowLikesFilterWrapper" class="modern-checkbox-wrapper mb-3" for="lowLikesCheck">
                                 <div class="checkbox-content">
                                     <div class="icon-box coffee-icon-box" style="background: rgba(139, 109, 78, 0.15); color: #8b6d4e;">
                                          <i class="fas fa-heart-broken"></i>
@@ -94,12 +94,22 @@
                                     </div>
                                 </div>
                                 <label class="toggle-switch">
-                                    <input type="checkbox" id="lowLikesCheck" name="check_likes" value="on" onchange="handleLowLikesCheckbox()">
+                                    <input type="checkbox" id="lowLikesCheck" name="low_likes" value="on" onchange="handleLowLikesCheckbox()">
                                     <span class="slider coffee-slider"></span>
                                 </label>
                             </label>
 
-<div id="homeUtilities"></div></div></details>
+<div id="homeUtilities">
+    <div class="home-step"><label>Kontrol türü</label></div>
+    <input type="hidden" id="controlMode" name="control_mode" value="comments">
+    <input type="hidden" id="checkLikesValue" name="check_likes" value="">
+    <div class="mode-toggle-group" role="group" aria-label="Kontrol türü">
+        <div class="mode-toggle-glider" id="controlTypeGlider"></div>
+        <button type="button" id="controlComments" class="mode-toggle-btn active" aria-pressed="true" onclick="setControlType('comments')"><i class="fas fa-comment"></i><span>Yorum</span></button>
+        <button type="button" id="controlLikes" class="mode-toggle-btn" aria-pressed="false" onclick="setControlType('likes')"><i class="fas fa-heart"></i><span>Beğeni</span></button>
+    </div>
+    <p class="mode-hint" id="controlTypeHint">Paylaşımlara yapılan yorumlar kontrol edilir.</p>
+</div></div></details>
                         <div class="mb-3">
 
                             <div class="home-step"><span>01</span><label for="post_link_single">Paylaşım</label></div>
@@ -482,6 +492,7 @@
     <script src="{{ url_for('static', filename='js/result_polling.js') }}"></script>
     <script src="{{ url_for('static', filename='js/control_submit.js') }}"></script>
     <script src="{{ url_for('static', filename='js/form.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/manual_comment_warning.js') }}"></script>
 
     <!-- Page Transition Script -->
     <script>
