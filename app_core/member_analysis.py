@@ -162,6 +162,18 @@ def run(payload, progress):
                             return row
                         response=await fetch_comment_usernames_async(mid,token,session) or {}
                         row['comments'], obtained_count, complete = member_comments(response, username)
+                        count = details.get('comment_count')
+                        if not row['comments'] and (not response.get('ok') or not complete or
+                                not details.get('comment_count_verified') or type(count) is not int or obtained_count < count):
+                            from app_core.comment_verification import fetch_complete_comments
+                            verified = await fetch_complete_comments(mid, token, session)
+                            if verified.get('ok'):
+                                response = verified
+                                row['comments'], obtained_count, complete = member_comments(response, username)
+                            else:
+                                found, _, _ = member_comments(verified, username)
+                                if found: row['comments'] = found
+
                         if row['comments']:row['state']='present'
                         elif response.get('ok') and complete:
                             count = details.get('comment_count')
