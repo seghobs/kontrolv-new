@@ -7,7 +7,7 @@
             fallback.hidden = true;
             try {
                 await navigator.clipboard.writeText(button.dataset.copyPostUrl);
-                feedback.textContent = 'Paylaşım linki kopyalandı.';
+                feedback.textContent = '';
             } catch {
                 fallback.value = button.dataset.copyPostUrl;
                 fallback.hidden = false; fallback.focus(); fallback.select();
