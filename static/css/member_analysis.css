@@ -42,3 +42,5 @@ body .daily-analysis-dialog .daily-days button{min-width:0;height:34px;padding:0
 .member-missing-text[hidden] { display: none !important; }
 [data-retry-feedback] { padding: 0 24px; color: var(--muted-foreground); }
 [data-retry-feedback]:empty { display: none; }
+
+.member-post-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.member-post-actions .member-post-link{margin-left:0}.member-link-fallback[hidden]{display:none!important}.member-link-feedback:not(:empty){display:block;margin:10px 0;color:#dec2a6;font-size:12px}@media(max-width:650px){.member-post-actions{width:100%;margin-left:43px}}

@@ -1,4 +1,20 @@
 (() => {
+    document.querySelectorAll('[data-copy-post-url]').forEach(button => {
+        button.addEventListener('click', async () => {
+            const row = button.closest('.member-row');
+            const feedback = row.querySelector('.member-link-feedback');
+            const fallback = row.querySelector('.member-link-fallback');
+            fallback.hidden = true;
+            try {
+                await navigator.clipboard.writeText(button.dataset.copyPostUrl);
+                feedback.textContent = 'Paylaşım linki kopyalandı.';
+            } catch {
+                fallback.value = button.dataset.copyPostUrl;
+                fallback.hidden = false; fallback.focus(); fallback.select();
+                feedback.textContent = 'Otomatik kopyalanamadı. Seçili linki kopyalayabilirsiniz.';
+            }
+        });
+    });
     let retryPending = false;
     document.querySelectorAll('[data-retry-unknown], [data-member-refresh]').forEach(button => {
         button.addEventListener('click', async () => {
