@@ -27,6 +27,27 @@ def member_comments(response, username):
             matches.append(text if isinstance(text, str) else '')
     return matches, count, complete
 
+@member_bp.post('/api/member_analysis/direct')
+def start_direct():
+    from app_core.validators import is_valid_username
+    data = request.get_json(silent=True) or {}
+    username = normalize_username(str(data.get('username', '')))
+    tid = str(data.get('thread_id', ''))
+    date = str(data.get('date', ''))
+    end_date = str(data.get('end_date') or date)
+    if not is_valid_username(username) or not re.fullmatch(r'\d{1,100}', tid):
+        return jsonify(error='Geçerli bir kullanıcı adı ve grup seçin.'), 400
+    try:
+        if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', date): raise ValueError()
+        if not 0 <= (datetime.strptime(end_date, '%Y-%m-%d') - datetime.strptime(date, '%Y-%m-%d')).days <= 30: raise ValueError()
+    except ValueError:
+        return jsonify(error='Geçerli, en fazla 31 günlük tarih aralığı seçin.'), 400
+    payload = dict(dual_check=True, username=username, date=date, end_date=end_date, thread_id=tid,
+                   check_likes=False, skip_owner=bool(data.get('skip_owner', True)))
+    identifier = jobs.enqueue('member', payload)
+    return jsonify(success=True, job_id=identifier, result_url='/member-analysis/'+identifier)
+
+
 @member_bp.post('/api/member_analysis/<source_id>')
 def start(source_id):
     source=jobs.get_job(source_id)

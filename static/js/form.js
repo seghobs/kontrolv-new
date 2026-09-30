@@ -45,9 +45,11 @@ function renderUserTags() {
         `;
         tag.onclick = (e) => {
             if (!e.target.classList.contains('remove-tag')) {
-                openEditModal(cleanUser, index);
+                window.openMemberContext(cleanUser, index);
             }
         };
+        tag.tabIndex=0;tag.setAttribute('role','button');tag.setAttribute('aria-haspopup','dialog');
+        tag.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();window.openMemberContext(cleanUser,index);}};
         container.appendChild(tag);
     });
 

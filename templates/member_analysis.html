@@ -2,7 +2,7 @@
 {% block title %}@{{ job.payload.username }} · Üye analizi{% endblock %}
 {% block body %}
 
-    <nav class="member-nav"><a href="/result/{{ job.parent_id }}"><i class="fas fa-arrow-left" aria-hidden="true"></i> Önceki rapor</a><a href="/history"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> Denetim geçmişi</a></nav>
+    <nav class="member-nav"><a href="{{ '/result/' + job.parent_id if job.parent_id else '/' }}"><i class="fas fa-arrow-left" aria-hidden="true"></i> {{ 'Önceki rapor' if job.parent_id else 'Kontrole dön' }}</a><a href="/history"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> Denetim geçmişi</a></nav>
     <header class="member-hero">
         <div class="member-identity"><span class="member-avatar" aria-hidden="true"><i class="fas fa-user-check"></i></span><div><span class="member-eyebrow">ÜYEYE ÖZEL GÜNLÜK ANALİZ</span><h1>@{{ job.payload.username }}</h1><div class="member-meta"><span><i class="far fa-calendar" aria-hidden="true"></i> {{ job.payload.date[8:10] }}.{{ job.payload.date[5:7] }}.{{ job.payload.date[:4] }}</span><span><i class="{{ 'far fa-heart' if job.payload.check_likes else 'far fa-comment' }}" aria-hidden="true"></i> {{ 'Yorum + Beğeni kontrolü' if job.payload.dual_check else ('Beğeni kontrolü' if job.payload.check_likes else 'Yorum kontrolü') }}</span></div></div></div>
         <p>Seçilen tarihlerde gruba gönderilen paylaşımlar kontrol edilir. {% if job.payload.get('end_date') %}Bitiş: {{ job.payload.end_date }}.{% endif %}</p>
@@ -47,7 +47,7 @@
     <section class="member-section" id="member-present{{ suffix }}"><div class="member-section-head"><span class="member-section-icon"><i class="fas fa-user-check" aria-hidden="true"></i></span><div><h2>{{ 'Beğeni yapılanlar' if report.check_likes else 'Yorum yapılanlar' }} <span class="member-count">{{ report.counts.present }}</span></h2><p>{{ 'Güncel beğeni kaydı bulunan paylaşımlar' if report.check_likes else 'Üyenin yorumları ve ilgili paylaşımlar' }}</p></div></div><div class="member-section-body">{% for row in report.rows if row.state=='present' %}{{ post_row(row,loop.index,report.check_likes) }}{% else %}<p class="member-no-rows">{{ 'Beğeni' if report.check_likes else 'Yorum' }} kaydı bulunan paylaşım yok.</p>{% endfor %}</div></section>
     </div>
     {% else %}
-    <section class="member-processing"><span class="member-section-icon"><i class="fas fa-circle-info" aria-hidden="true"></i></span><div><h2>Sonuç görüntülenemedi</h2><p role="alert">Analiz kaydı mevcut ancak sonuç içeriği okunamadı. Önceki rapora dönerek yeni bir günlük analiz başlatabilirsiniz.</p><a href="/result/{{ job.parent_id }}">Önceki rapora dön →</a></div></section>
+    <section class="member-processing"><span class="member-section-icon"><i class="fas fa-circle-info" aria-hidden="true"></i></span><div><h2>Sonuç görüntülenemedi</h2><p role="alert">Analiz kaydı mevcut ancak sonuç içeriği okunamadı. Önceki rapora dönerek yeni bir günlük analiz başlatabilirsiniz.</p><a href="{{ '/result/' + job.parent_id if job.parent_id else '/' }}">Önceki rapora dön →</a></div></section>
     {% endfor %}
     <script src="{{ url_for('static',filename='js/member_report.js') }}"></script>
     {% elif status.status=='running' %}

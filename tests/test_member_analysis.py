@@ -7,6 +7,17 @@ from app_core.web_jobs import execute_job
 
 class MemberAnalysisTests(unittest.TestCase):
     setUp=test_jobs.JobTests.setUp
+    def test_direct_analysis_without_source_and_validation(self):
+        with patch('app_core.init_storage'): client=create_app().test_client()
+        params=dict(username='alice',thread_id='123456',date='2026-09-29',end_date='2026-09-30')
+        response=client.post('/api/member_analysis/direct',json=params)
+        self.assertEqual(response.status_code,200)
+        job=jobs.get_job(response.json['job_id'])
+        self.assertIsNone(job['parent_id']);self.assertEqual(job['payload']['thread_id'],'123456')
+        self.assertTrue(job['payload']['dual_check']);self.assertEqual(job['payload']['username'],'alice')
+        for change in [dict(thread_id=''),dict(username=''),dict(date='bad'),dict(end_date='2026-09-28')]:
+            self.assertEqual(client.post('/api/member_analysis/direct',json={**params,**change}).status_code,400)
+
     def source(self,likes=False):
         identifier=jobs.enqueue('manual',{'thread_id':'g','check_likes':likes})
         jobs.claim_request(identifier,'t');jobs.complete(identifier,'t',{'thread_id':'g','group':['alice','bob'],'check_likes':likes,'links':[]})

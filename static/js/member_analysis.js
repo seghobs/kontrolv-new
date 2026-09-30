@@ -1,5 +1,5 @@
 (() => {
-    if (!window.postCode || !window.resultThreadId) return;
+    if ((!window.postCode || !window.resultThreadId) && !document.getElementById('checkForm')) return;
     const dialog = document.createElement('dialog');
     dialog.className = 'member-dialog daily-analysis-dialog';
     dialog.setAttribute('aria-labelledby','daily-analysis-title');
@@ -49,7 +49,13 @@
     startDate.addEventListener('change',syncDates);endDate.addEventListener('change',syncDates);
     startDate.value=today();syncDates();
 
-    let username = '';
+    let username = '', directGroup = '';
+    window.openDailyMemberAnalysis = (name, group, selectedDate) => {
+        username=name; directGroup=group;
+        dialog.querySelector('.member-name').textContent='@'+name;
+        startDate.value=selectedDate || today();endDate.value=startDate.value;
+        closeCalendar();syncDates();dialog.showModal();
+    };
     dialog.querySelector('.daily-dismiss').onclick = () => dialog.close();
     dialog.querySelector('.member-close').onclick = () => dialog.close();
     document.querySelectorAll('.eksikler-list li[data-username]').forEach(item => {
@@ -68,9 +74,9 @@
         if(!startDate.value||(endDate.value&&endDate.value<startDate.value)){dialog.querySelector('.member-error').textContent='Bitiş tarihi başlangıçtan önce olamaz. Tarih aralığını kontrol et.';return;}
         const button = dialog.querySelector('[type=submit]');button.disabled = true;
         try {
-            const response = await fetch('/api/member_analysis/' + encodeURIComponent(window.postCode), {
+            const response = await fetch('/api/member_analysis/' + (directGroup ? 'direct' : encodeURIComponent(window.postCode)), {
                 method:'POST',headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({username, date:dialog.querySelector('[name=date]').value,end_date:dialog.querySelector('[name=end_date]').value,skip_owner:dialog.querySelector('[name=skip_owner]').checked})
+                body:JSON.stringify({username, thread_id:directGroup, date:dialog.querySelector('[name=date]').value,end_date:dialog.querySelector('[name=end_date]').value,skip_owner:dialog.querySelector('[name=skip_owner]').checked})
             });
             let data;
             try {data=await response.json();}catch{throw new Error('Sunucudan geçerli yanıt alınamadı. Biraz sonra tekrar dene.');}
