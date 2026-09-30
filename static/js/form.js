@@ -43,6 +43,14 @@ function renderUserTags() {
             <span>${cleanUser}</span>
             <i class="fas fa-times remove-tag" onclick="removeUserTag(event, ${index})"></i>
         `;
+        if (window.memberShareCountsReady) {
+            const count=window.memberShareCounts?.[cleanUser.replace(/^@/,'').toLowerCase()] || {post:0,reels:0,story:0,total:0};
+            const badge=document.createElement('span');badge.className='member-share-count';
+            badge.textContent=`${count.post} post · ${count.reels} Reels · ${count.story} hikâye`;
+            badge.title=`Seçili tarihte gruba ${count.total} gönderim. Tekrarlanan paylaşımlar da sayılır.`;
+            if(count.total>1){badge.classList.add('over-limit');badge.textContent+=' · '+count.total+' paylaşım';}
+            tag.insertBefore(badge,tag.querySelector('.remove-tag'));
+        }
         tag.onclick = (e) => {
             if (!e.target.classList.contains('remove-tag')) {
                 window.openMemberContext(cleanUser, index);
@@ -407,6 +415,7 @@ function loadGroupMembers(threadIdFromDropdown) {
     
     window.isMembersLoading = true;
     window.isPostsLoading = true;
+    window.memberShareCountsReady=false;window.memberShareCounts={};renderUserTags();
     
     loadGroupPosts(threadId);
 }
@@ -713,6 +722,7 @@ function loadGroupPosts(threadIdFromMembers) {
     
     // Yüklenme başladı, butonları deaktif et
     window.isPostsLoading = true;
+    window.memberShareCountsReady=false;window.memberShareCounts={};renderUserTags();
     const fw = document.getElementById("sharersFilterWrapper");
     if(fw) { fw.style.opacity = "0.5"; fw.style.pointerEvents = "none"; }
     const c1 = document.getElementById("onlySharersCheck");
@@ -727,10 +737,12 @@ function loadGroupPosts(threadIdFromMembers) {
         dropdownText.textContent = "Paylaşımlar yükleniyor...";
     }
     
+    const shareCountRequest = (window.shareCountRequest || 0) + 1; window.shareCountRequest=shareCountRequest;
     fetch("/api/get_group_posts/" + threadId + "?date=" + dateFilter)
         .then(r => r.json())
         .then(data => {
             if (currentThreadId && currentThreadId !== threadId) return;
+            if (shareCountRequest !== window.shareCountRequest) return;
             if (dropdownText) {
                 dropdownText.textContent = "-- Paylaşım Seç --";
             }
@@ -741,6 +753,7 @@ function loadGroupPosts(threadIdFromMembers) {
                 return;
             }
             
+            window.memberShareCounts=data.member_share_counts || {};window.memberShareCountsReady=data.share_counts_complete===true;renderUserTags();
             window.groupStoryCount = data.story_count || 0;
             if (data.posts) {
                 window.allFetchedPosts = data.posts;
@@ -778,6 +791,7 @@ function loadGroupPosts(threadIdFromMembers) {
         })
         .catch(err => {
             if (currentThreadId && currentThreadId !== threadId) return;
+            if (shareCountRequest !== window.shareCountRequest) return;
             if (dropdownText) {
                 dropdownText.textContent = "-- Paylaşım Seç --";
             }
@@ -785,6 +799,7 @@ function loadGroupPosts(threadIdFromMembers) {
         })
         .finally(() => {
             if (currentThreadId && currentThreadId !== threadId) return;
+            if (shareCountRequest !== window.shareCountRequest) return;
             window.isPostsLoading = false;
             checkAndEnableToggles();
         });

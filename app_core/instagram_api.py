@@ -1196,7 +1196,9 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
         unique = {}
         for post in posts:
             unique.setdefault(post['code'], post)
-        return {"ok": True, "posts": sorted(unique.values(), key=lambda p:p.get('shared_at',''), reverse=True), "story_count":story_count}
+        from app_core.share_counts import count_member_shares
+        share_counts = count_member_shares(thread_messages, thread_users_map, min_ts, max_ts, posts)
+        return {"ok": True, "posts": sorted(unique.values(), key=lambda p:p.get('shared_at',''), reverse=True), "story_count":story_count, "member_share_counts":share_counts, "share_counts_complete":bool(complete)}
     except Exception as e:
         logger.error("Grup paylasimlari cekme hatasi: %s", e)
         return {"ok": False, "error": str(e)}

@@ -48,3 +48,5 @@ body .daily-analysis-dialog .daily-days button{min-width:0;height:34px;padding:0
 .member-context{width:min(420px,calc(100vw - 32px));padding:22px;border:1px solid #765435;border-radius:20px;background:linear-gradient(140deg,#241b13,#130f0b);color:#e5d5c5}.member-context::backdrop{background:#000a;backdrop-filter:blur(4px)}.member-context header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}.member-context button{font:inherit;color:inherit;background:#c4956a10;border:1px solid #c4956a40;border-radius:10px;padding:12px;cursor:pointer;text-align:left}.member-context-actions,.member-context-posts{display:grid;gap:10px}.member-context p{color:#bea68b;font-size:13px}.member-context button:focus-visible{outline:2px solid #c49b70;outline-offset:2px}
 
 .member-context button[hidden]{display:none!important}
+
+.user-tag{flex-wrap:wrap}.user-tag .member-share-count{font-size:10px;color:#baa28a;white-space:normal}.user-tag .member-share-count.over-limit{color:#f0bd83;background:#c4956a18;border:1px solid #c4956a44;border-radius:6px;padding:3px 6px}
