@@ -1930,3 +1930,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+// Refresh daily share counters on opening the member editor without replacing edits.
+document.addEventListener('DOMContentLoaded', () => {
+    const editor = document.querySelector('.home-member-editor');
+    if (!editor) return;
+    const status = document.createElement('p');
+    status.className = 'member-count-refresh-status';
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    editor.querySelector('summary').after(status);
+    let pending = null;
+    editor.addEventListener('toggle', async () => {
+        if (!editor.open) return;
+        const group = currentThreadId || document.getElementById('thread_id_input')?.value;
+        const date = document.getElementById('dateFilter')?.value;
+        if (!group || !date || window.isPostsLoading) return;
+        const key = group + ':' + date;
+        if (pending?.key === key) return;
+        const request = {key, revision: window.shareCountRequest};
+        pending = request;
+        status.textContent = 'Paylaşım sayıları yenileniyor…';
+        const current = () => pending === request && currentThreadId === group &&
+            document.getElementById('dateFilter')?.value === date && window.shareCountRequest === request.revision;
+        try {
+            const response = await fetch('/api/get_group_posts/' + encodeURIComponent(group) + '?date=' + encodeURIComponent(date), {cache: 'no-store'});
+            const data = await response.json();
+            if (!current()) return;
+            if (!response.ok || !data.ok || !data.share_counts_complete) throw new Error('Paylaşım sayıları yenilenemedi. Önceki sayılar korunuyor; tekrar açarak deneyebilirsin.');
+            window.memberShareCounts = data.member_share_counts || {};
+            window.memberShareCountsReady = true;
+            renderUserTags();
+            status.textContent = '';
+        } catch (error) {
+            if (current()) status.textContent = 'Paylaşım sayıları yenilenemedi. Önceki sayılar korunuyor; tekrar açarak deneyebilirsin.';
+        } finally {
+            if (pending === request) { pending = null; if (!currentThreadId || currentThreadId !== group || document.getElementById('dateFilter')?.value !== date || window.shareCountRequest !== request.revision) status.textContent = ''; }
+        }
+    });
+});

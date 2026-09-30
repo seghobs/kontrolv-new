@@ -50,3 +50,5 @@ body .daily-analysis-dialog .daily-days button{min-width:0;height:34px;padding:0
 .member-context button[hidden]{display:none!important}
 
 .user-tag{flex-wrap:wrap}.user-tag .member-share-count{font-size:10px;color:#baa28a;white-space:normal}.user-tag .member-share-count.over-limit{color:#f0bd83;background:#c4956a18;border:1px solid #c4956a44;border-radius:6px;padding:3px 6px}
+
+.member-count-refresh-status:empty{display:none}.member-count-refresh-status{font-size:12px;color:#bea68b;margin:10px 0}
