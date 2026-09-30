@@ -193,7 +193,11 @@ function loadGroups() {
             
             if (data.groups && data.groups.length > 0) {
                 dropdownOptions.innerHTML = '';
-                
+                // Keep the native backing select synchronized with the visible list.
+                select.replaceChildren(new Option('-- Instagram Grubu Seç --', ''));
+                data.groups.forEach(g => select.add(new Option(g.name, String(g.id))));
+                select.value = currentThreadId || '';
+
                 // Favorilere göre sırala
                 const favs = getFavorites();
                 const sortedGroups = [...data.groups].sort((a, b) => {
