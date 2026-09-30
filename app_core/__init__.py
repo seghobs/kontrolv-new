@@ -50,8 +50,6 @@ def create_app():
     app.register_blueprint(save_bp)
     from app_core.member_analysis import member_bp
     app.register_blueprint(member_bp)
-    from app_core.message_requests import bp as message_requests_bp
-    app.register_blueprint(message_requests_bp)
     app.register_blueprint(admin_bp)
     from app_core.routes.history import history_bp
     app.register_blueprint(history_bp)
