@@ -3,10 +3,19 @@
  menu.innerHTML='<header><strong></strong><button type="button" data-close aria-label="Kapat">×</button></header><div class="member-context-actions"><button type="button" data-action="analysis">Üyenin eksiklerini kontrol et</button><button type="button" data-action="post">Bu üyenin paylaşımını kontrol et</button><button type="button" data-action="delete">Bu üyeyi sil</button></div><p role="status"></p><div class="member-context-posts"></div>';
  document.body.append(menu);let name='',index=-1;
  const selectedGroup=()=>document.getElementById('thread_id_input')?.value || document.getElementById('groupSelect')?.value || '';
+ const memberPosts=()=>{
+  if(!selectedGroup() || window.isPostsLoading) return [];
+  const normalize=s=>(s||'').replace(/^@/,'').trim().toLowerCase();
+  const allowed=new Set([...document.getElementById('postSelect').options].map(o=>o.value));
+  return (window.allFetchedPosts||[]).filter(p=>normalize(p.username)===normalize(name)&&allowed.has(p.url));
+ };
+ const syncPostAction=()=>{const hidden=memberPosts().length===0;menu.querySelector('[data-action=post]').hidden=hidden;if(hidden)menu.querySelector('.member-context-posts').replaceChildren();};
+ let refreshTimer;
+ menu.addEventListener('close',()=>clearInterval(refreshTimer));
  const say=text=>menu.querySelector('[role=status]').textContent=text;
  menu.querySelector('[data-close]').onclick=()=>menu.close();
  menu.addEventListener('click',e=>{if(e.target===menu){const r=menu.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)menu.close();}});
- window.openMemberContext=(user,userIndex)=>{name=user;index=userIndex;menu.querySelector('strong').textContent='@'+user;say('');menu.querySelector('.member-context-posts').replaceChildren();menu.showModal();};
+ window.openMemberContext=(user,userIndex)=>{name=user;index=userIndex;menu.querySelector('strong').textContent='@'+user;say('');menu.querySelector('.member-context-posts').replaceChildren();syncPostAction();menu.showModal();clearInterval(refreshTimer);refreshTimer=setInterval(syncPostAction,300);};
  menu.querySelector('[data-action=delete]').onclick=e=>{removeUserTag(e,index);menu.close();};
  menu.querySelector('[data-action=analysis]').onclick=()=>{
   const group=selectedGroup();
@@ -21,9 +30,7 @@
  menu.querySelector('[data-action=post]').onclick=()=>{
   if(window.isPostsLoading){say('Paylaşımlar yükleniyor; tamamlanınca tekrar deneyin.');return;}
   if(!selectedGroup()){say('Önce bir Instagram grubu seçin.');return;}
-  const normalize=s=>(s||'').replace(/^@/,'').trim().toLowerCase();
-  const allowed=new Set([...document.getElementById('postSelect').options].map(o=>o.value));
-  const posts=(window.allFetchedPosts||[]).filter(p=>normalize(p.username)===normalize(name)&&allowed.has(p.url));
+  const posts=memberPosts();
   const list=menu.querySelector('.member-context-posts');list.replaceChildren();
   if(!posts.length){say('Seçilen tarih ve filtrelerde bu üyeye ait paylaşım bulunamadı.');return;}
   say('Kontrol edilecek paylaşımı seçin.');
