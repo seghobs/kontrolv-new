@@ -40,7 +40,7 @@
     function position() {
         if (!active) return;
         const r=returnFocus.getBoundingClientRect();
-        dialog.style.width=Math.min(r.width,innerWidth-16)+'px';
+        dialog.style.width=Math.min(Math.max(r.width,220),innerWidth-16)+'px';
         dialog.style.left=Math.max(8,Math.min(r.left,innerWidth-dialog.offsetWidth-8))+'px';
         const below=innerHeight-r.bottom-16, above=r.top-16;
         const height=Math.min(320,Math.max(below,above));
