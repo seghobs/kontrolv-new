@@ -74,7 +74,7 @@ def gemini_settings():
 def panel():
     if not session.get("admin_logged_in"):
         return redirect(url_for("admin.login"))
-    return render_template("admin.html")
+    return render_template("admin.html", global_exemption_count=len(load_global_exemptions()))
 
 
 @admin_bp.route("/login", methods=["GET", "POST"])
