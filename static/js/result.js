@@ -652,19 +652,37 @@ window.onload = function onLoad() {
         }
     });
 
-    // Anlık Paylaşım Değiştirici
+    // Fetch Instagram posts only when the user opens the selector.
+    const selectorButton = document.getElementById('togglePostSelectorBtnWrapper');
+    if (selectorButton && window.resultThreadId) selectorButton.style.display = 'block';
+};
+
+let resultPostsLoading = false;
+let resultPostsLoaded = false;
+function loadResultGroupPosts() {
+    if (resultPostsLoading || resultPostsLoaded) return;
     if (window.resultThreadId) {
         const dropdownTextEl = document.getElementById("resultPostDropdownText");
         const optionsEl = document.getElementById("resultPostDropdownOptions");
         const containerEl = document.getElementById("resultPostSelectorContainer");
         
         if (dropdownTextEl && optionsEl && containerEl) {
-            // Dün ve bugün atılan postları paralel çekelim
-            Promise.all([
-                fetch(`/api/get_group_posts/${window.resultThreadId}?date=yesterday`).then(r => r.json()),
-                fetch(`/api/get_group_posts/${window.resultThreadId}?date=today`).then(r => r.json())
+            resultPostsLoading = true;
+            dropdownTextEl.textContent = 'Paylaşımlar yükleniyor…';
+            optionsEl.textContent = 'Paylaşımlar yükleniyor…';
+            const loadDay = async (day) => {
+                const response = await fetch(`/api/get_group_posts/${encodeURIComponent(window.resultThreadId)}?date=${day}`);
+                const data = await response.json();
+                if (!response.ok || !data.ok) throw new Error('Paylaşımlar alınamadı.');
+                return data;
+            };
+            return Promise.all([
+                loadDay('yesterday'),
+                loadDay('today')
             ])
             .then(([resYest, resToday]) => {
+                resultPostsLoaded = true;
+                dropdownTextEl.textContent = '-- Paylaşım Seç --';
                 const postsYest = (resYest && resYest.posts) || [];
                 const postsToday = (resToday && resToday.posts) || [];
                 
@@ -724,21 +742,25 @@ window.onload = function onLoad() {
                         optionsEl.appendChild(div);
                     });
                     
-                    // ⚡ Butona basılmadan önce kart kesinlikle gizli kalsın
-                    containerEl.style.display = "none";
-                    const btnWrapper = document.getElementById("togglePostSelectorBtnWrapper");
-                    if (btnWrapper) btnWrapper.style.display = "block";
                 } else {
-                    containerEl.style.display = "none";
+                    dropdownTextEl.textContent = 'Dün ve bugün paylaşım yok';
+                    optionsEl.textContent = 'Bu grupta dün ve bugün için paylaşım bulunamadı.';
                 }
             })
-            .catch(err => {
-                console.error("Grup paylaşımlarını yükleme hatası:", err);
-                containerEl.style.display = "none";
-            });
+            .catch(() => {
+                dropdownTextEl.textContent = 'Paylaşımlar yüklenemedi';
+                optionsEl.replaceChildren();
+                const retry = document.createElement('button');
+                retry.type = 'button';
+                retry.className = 'result-action-btn primary';
+                retry.textContent = 'Tekrar dene';
+                retry.addEventListener('click', loadResultGroupPosts);
+                optionsEl.appendChild(retry);
+            })
+            .finally(() => { resultPostsLoading = false; });
         }
     }
-};
+}
 
 function toggleResultDropdown(id) {
     const dropdown = document.getElementById(id);
@@ -788,6 +810,7 @@ function togglePostSelectorCard() {
     const isHidden = mainContainer.style.display === "none" || mainContainer.style.display === "";
     if (isHidden) {
         mainContainer.style.display = "block";
+        loadResultGroupPosts();
         if (container) {
             slideDown(container);
             if (chevron) chevron.style.transform = "rotate(180deg)";
