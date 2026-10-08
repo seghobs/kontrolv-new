@@ -323,10 +323,15 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
                         commenters_normalized.add(norm_uname)
                 
                 if not check_likes and (all_result.get('incomplete') or ((grup_uye_kullanicilar - all_exempted_for_link - commenters_normalized) and not comments_cover_total(post_details, comments_list))):
-                    tracker['done'] += 1
-                    if progress_callback:
-                        progress_callback(tracker['done'], tracker['total'], 'Paylaşım doğrulanamadı; diğer kontroller sürüyor.')
-                    return incomplete_comment_post(link_single, post_details, post_sender, comments_list)
+                    from app_core.comment_verification import recover_comment_list
+                    post_details, all_result = await recover_comment_list(media_id, working_token, session, post_details, all_result)
+                    comments_list = all_result.get('comments', [])
+                    commenters_normalized = {normalize_username(u) for u, _ in comments_list}
+                    if all_result.get('incomplete') or not comments_cover_total(post_details, comments_list):
+                        tracker['done'] += 1
+                        if progress_callback:
+                            progress_callback(tracker['done'], tracker['total'], 'Yorum verisi tamamlanamadı; diğer kontroller sürüyor.')
+                        return incomplete_comment_post(link_single, post_details, post_sender, comments_list)
                 require_complete_result(all_result)
                 eksikler = grup_uye_kullanicilar - all_exempted_for_link - commenters_normalized
                 if check_likes:
@@ -421,8 +426,13 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
                 comments_list = all_result if isinstance(all_result, list) else all_result.get("comments", [])
                 commenters_normalized = {normalize_username(uname) for uname, _ in comments_list}
             if not check_likes and ((isinstance(all_result, dict) and all_result.get('incomplete')) or ((grup_uye_kullanicilar - all_exempted_for_link - commenters_normalized) and not comments_cover_total(post_details, comments_list))):
-                fetched_results.append(incomplete_comment_post(link_single, post_details, post_sender, comments_list))
-                continue
+                from app_core.comment_verification import recover_comment_list_sync
+                post_details, all_result = recover_comment_list_sync(media_id, working_token, post_details, all_result)
+                comments_list = all_result.get('comments', []) if isinstance(all_result, dict) else all_result
+                commenters_normalized = {normalize_username(u) for u, _ in comments_list}
+                if (isinstance(all_result, dict) and all_result.get('incomplete')) or not comments_cover_total(post_details, comments_list):
+                    fetched_results.append(incomplete_comment_post(link_single, post_details, post_sender, comments_list))
+                    continue
             try:
                 require_complete_result(all_result)
                 eksikler = grup_uye_kullanicilar - all_exempted_for_link - commenters_normalized

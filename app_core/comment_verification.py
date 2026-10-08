@@ -79,3 +79,27 @@ async def fetch_complete_comments(media_id, token_record, session):
     except Exception:
         complete = False
     return dict(ok=complete, incomplete=not complete, comments=list(records.values()), comment_ids=list(records))
+
+
+async def recover_comment_list(media_id, token, session, details, response):
+    """Recover a partial stream through the full comment and reply endpoint."""
+    comments = response.get('comments', []) if isinstance(response, dict) else response
+    if isinstance(response, dict) and response.get('status') not in (None, 200):
+        return details, response
+    if isinstance(response, dict) and not response.get('incomplete') and api.comments_cover_total(details, comments):
+        return details, response
+    verified = await fetch_complete_comments(media_id, token, session)
+    if verified.get('ok'):
+        refreshed = await api.get_post_details_async(media_id, token, session)
+        if refreshed and refreshed.get('comment_count_verified'):
+            details = refreshed
+        response = verified
+    return details, response
+
+
+def recover_comment_list_sync(media_id, token, details, response):
+    import asyncio
+    async def run():
+        async with aiohttp.ClientSession() as session:
+            return await recover_comment_list(media_id, token, session, details, response)
+    return asyncio.run(run())
