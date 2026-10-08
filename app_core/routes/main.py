@@ -624,6 +624,8 @@ def result_page_new(post_code):
         copy_reports = {mode: missing_text(report) for mode, report in reports(result).items()}
         if result.get('dual_check'):
             result = result['like_report'] if request.args.get('mode') == 'likes' else result['comment_report']
+        from app_core.member_notes import attach_notes
+        attach_notes(result.get('thread_id'), result.get('links'))
         return render_template(
             "result.html",
             dual_check=full_result.get('dual_check', False),

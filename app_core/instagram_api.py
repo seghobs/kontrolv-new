@@ -957,7 +957,7 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
             for page in range(40):
                 if time.monotonic()-pagination_started > 110: raise ValueError('Günün tamamı istek süresi içinde alınamadı.')
                 stamps=[int(i.get('timestamp',0)) for i in thread.get('items',[])]
-                if (stamps and min(stamps)<=min_ts) or not thread.get('has_older'): break
+                if (stamps and min(stamps)<=min_ts-30*60*1000000) or not thread.get('has_older'): break
                 cursor=thread.get('oldest_cursor')
                 if not cursor or cursor in seen_cursors: raise ValueError('Grup mesajlarının tamamı alınamadı.')
                 seen_cursors.add(cursor)
@@ -967,6 +967,8 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
                 thread=response.json().get('thread')
                 if not isinstance(thread,dict): raise ValueError('Mesaj sayfası doğrulanamadı.')
                 all_messages.extend(thread.get('items',[]))
+                for member in thread.get('users', []):
+                    thread_users_map[str(member.get('pk', ''))] = member.get('username', '')
             else: raise ValueError('Mesaj sınırına ulaşıldı; tam liste doğrulanamadı.')
             t_data['thread']['items']=all_messages
 
@@ -1196,6 +1198,9 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
         unique = {}
         for post in posts:
             unique.setdefault(post['code'], post)
+        if complete:
+            from app_core.member_notes import nearby_notes, cache_notes
+            cache_notes(thread_id, posts, nearby_notes(thread_messages, thread_users_map, min_ts, max_ts), target_date.strftime('%Y-%m-%d'))
         from app_core.share_counts import count_member_shares
         share_counts = count_member_shares(thread_messages, thread_users_map, min_ts, max_ts, posts)
         return {"ok": True, "posts": sorted(unique.values(), key=lambda p:p.get('shared_at',''), reverse=True), "story_count":story_count, "member_share_counts":share_counts, "share_counts_complete":bool(complete)}

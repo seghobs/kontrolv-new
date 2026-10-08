@@ -198,6 +198,20 @@
                             </div>
                         </div>
 
+                        {% if item.nearby_notes %}
+                        <aside class="member-nearby-notes" aria-label="Üyenin notu">
+                            <strong><i class="far fa-comment" aria-hidden="true"></i> Üyenin notu</strong>
+                            {% for note in item.nearby_notes %}
+                            <div class="member-nearby-note">
+                                <small>@{{ note.username or 'Gruba gönderen üye' }} · {{ note.time }} · Türkiye saati</small>
+                                <p>{{ note.text }}</p>
+                                {% if note.ambiguous %}<small>Mesaj birden fazla paylaşıma eşit yakınlıkta; hangi paylaşım için yazıldığını kontrol edin.</small>{% endif %}
+                            </div>
+                            {% endfor %}
+                            <small>Gruba gönderen üyenin paylaşımına 30 dakika içindeki yakın mesajlarıdır. Kontrol türünü değiştirmez.</small>
+                        </aside>
+                        {% endif %}
+
                         <div id="eksiklerSection-{{ loop.index }}" class="result-section-content collapsed">
                             {% if item.skipped_reason %}
                             <div class="alert" role="status" style="color:var(--accent-caramel);border:1px solid var(--accent-caramel);border-radius:12px;">
