@@ -1,5 +1,7 @@
 """Complete comment verification, retaining comment identities and child replies."""
 import json
+import logging
+logger = logging.getLogger(__name__)
 import aiohttp
 from app_core import instagram_api as api
 from app_core.validators import is_valid_username
@@ -20,7 +22,7 @@ async def fetch_complete_comments(media_id, token_record, session):
             from app_core.session_state import update_session, response_cookies
             update_session(username, response.headers, expected_token=headers.get('authorization'), cookies=response_cookies(response), expected_revision=revision)
             if response.status != 200:
-                raise ValueError('Comment request failed')
+                raise ValueError('Comment request failed: HTTP '+str(response.status))
             data = json.loads(await response.text())
             if not isinstance(data, dict) or data.get('status') == 'fail':
                 raise ValueError('Invalid comment response')
@@ -51,7 +53,7 @@ async def fetch_complete_comments(media_id, token_record, session):
         return ids
 
     try:
-        params = {'can_support_threading': 'true'}
+        params = {'can_support_threading': 'true', 'sort_order': 'recent'}
         cursors = set()
         for _ in range(api.MAX_COMMENT_PAGES):
             data = await fetch('comments/', params)
@@ -63,7 +65,7 @@ async def fetch_complete_comments(media_id, token_record, session):
             key = 'min_id' if data.get('next_min_id') else 'max_id'
             if (key, str(cursor)) in cursors:
                 complete = False;break
-            cursors.add((key, str(cursor)));params = {key: cursor}
+            cursors.add((key, str(cursor)));params = {'can_support_threading':'true','sort_order':'recent',key:cursor}
         else: complete = False
         for cid, (expected, children) in list(parents.items()):
             params = {};cursors = set()
@@ -76,7 +78,8 @@ async def fetch_complete_comments(media_id, token_record, session):
                 cursors.add(str(cursor))
                 params = {'min_id' if data.get('next_min_child_cursor') else 'max_id': cursor}
             if len(children) < expected: complete = False
-    except Exception:
+    except Exception as error:
+        logger.warning('Full comment endpoint failed: %s', type(error).__name__)
         complete = False
     return dict(ok=complete, incomplete=not complete, comments=list(records.values()), comment_ids=list(records))
 
@@ -89,11 +92,17 @@ async def recover_comment_list(media_id, token, session, details, response):
     if isinstance(response, dict) and not response.get('incomplete') and api.comments_cover_total(details, comments):
         return details, response
     verified = await fetch_complete_comments(media_id, token, session)
+    logger.info('COMMENT_RECOVERY expected=%s stream=%s recovered=%s complete=%s',details.get('comment_count'),len(comments),len(verified.get('comments',[])),verified.get('ok'))
     if verified.get('ok'):
         refreshed = await api.get_post_details_async(media_id, token, session)
         if refreshed and refreshed.get('comment_count_verified'):
             details = refreshed
         response = verified
+        if not api.comments_cover_total(details, response.get('comments', [])):
+            retry = await api.fetch_comment_usernames_async(media_id, token, session)
+            if retry.get('ok') and not retry.get('incomplete') and api.comments_cover_total(details, retry.get('comments', [])):
+                response = retry
+            logger.info('COMMENT_RECOVERY retry=%s complete=%s',len(retry.get('comments',[])),api.comments_cover_total(details,response.get('comments',[])))
     return details, response
 
 

@@ -11,8 +11,8 @@ class Response:
  async def __aexit__(self,*args):pass
  async def text(self):return json.dumps(self.data)
 class Session:
- def __init__(self,pages):self.pages=iter(pages);self.urls=[]
- def get(self,url,**kw):self.urls.append(url);return Response(next(self.pages))
+ def __init__(self,pages):self.pages=iter(pages);self.urls=[];self.params=[]
+ def get(self,url,**kw):self.urls.append(url);self.params.append(kw.get('params',{}).copy());return Response(next(self.pages))
 class CompleteCommentTests(unittest.TestCase):
  def fetch(self,pages):
   session=Session(pages)
@@ -33,3 +33,7 @@ class CompleteCommentTests(unittest.TestCase):
   r,_=self.fetch([{'comments':[{'pk':'1','user':None}]}]);self.assertFalse(r['ok'])
  def test_network_failure_preserves_found_comments(self):
   r,_=self.fetch([{'comments':[comment('1')],'next_min_id':'a'}]);self.assertFalse(r['ok']);self.assertEqual(len(r['comments']),1)
+
+ def test_recent_order_is_preserved_during_pagination(self):
+  r,s=self.fetch([{'comments':[comment('1')],'next_min_id':'a'},{'comments':[comment('2')]}])
+  self.assertTrue(r['ok']);self.assertEqual([p['sort_order'] for p in s.params],['recent','recent'])

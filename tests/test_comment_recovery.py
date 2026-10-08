@@ -21,3 +21,9 @@ class CommentRecoveryTests(unittest.IsolatedAsyncioTestCase):
   with patch('app_core.comment_verification.fetch_complete_comments',AsyncMock()) as fetch:
    await recover_comment_list('id',{},None,{},response)
   fetch.assert_not_awaited()
+
+ async def test_second_stream_confirms_missing_tail(self):
+  details={'comment_count':3,'comment_count_verified':True};partial={'ok':True,'comments':[('member','one')]};full={'ok':True,'comments':[('member','one'),('member','two')]};retry={'ok':True,'comments':[('member','one'),('member','two'),('member','three')]}
+  with patch('app_core.comment_verification.fetch_complete_comments',AsyncMock(return_value=full)),patch('app_core.instagram_api.get_post_details_async',AsyncMock(return_value=details)),patch('app_core.instagram_api.fetch_comment_usernames_async',AsyncMock(return_value=retry)):
+   _,response=await recover_comment_list('id',{},None,details,partial)
+  self.assertEqual(len(response['comments']),3)
