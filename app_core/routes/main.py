@@ -1181,3 +1181,42 @@ def group_control_preferences(thread_id):
         return jsonify(ok=False, error='Grup tercihleri alınamadı veya kaydedilemedi. Tekrar deneyin.'), 503
     finally:
         conn.close()
+
+
+@main_bp.route('/api/reports/<post_code>/notes/refresh', methods=['POST'])
+def refresh_member_notes(post_code):
+    from app_core.member_notes import post_codes
+    from app_core.followup import read, link_key
+    from app_core.jobs import get_job
+    job = get_job(post_code)
+    if not job or job.get('state') != 'completed':
+        return jsonify(error='Tamamlanmış rapor bulunamadı.'), 404
+    report = job.get('result') or {}
+    if report.get('dual_check'): report = report.get('comment_report') or {}
+    body = request.get_json(silent=True) or {}
+    if not isinstance(body, dict): return jsonify(error='Geçersiz istek.'), 400
+    url = body.get('link')
+    if not isinstance(url, str): return jsonify(error='Paylaşım seçilmedi.'), 400
+    item = next((dict(p) for p in report.get('links', []) if link_key(p.get('post_link','')) == link_key(url)), None)
+    thread_id = report.get('thread_id')
+    if item is None or not thread_id: return jsonify(error='Paylaşım bu raporun grubuna ait değil.'), 400
+    codes = post_codes({'text':url})
+    dates = (job.get('payload') or {}).get('shared_dates') or read('shared-dates:'+str(thread_id), {})
+    stamp = dates.get(link_key(url))
+    try:
+        target = datetime.datetime.fromisoformat(stamp.replace('Z','+00:00')).astimezone(pytz.timezone('Europe/Istanbul'))
+    except (AttributeError, ValueError, TypeError):
+        days = set()
+        for code in codes: days.update(read('nearby-notes:'+str(thread_id),{}).get(code,{}))
+        if len(days) != 1: return jsonify(error='Paylaşım tarihi belirlenemedi. Grubu ve tarihi formdan yeniden seçin.'), 400
+        target = pytz.timezone('Europe/Istanbul').localize(datetime.datetime.strptime(next(iter(days)), '%Y-%m-%d'))
+    result = fetch_group_media_with_failover(thread_id, target, complete=True)
+    if not result.get('ok'): return jsonify(error='Grup mesajları yenilenemedi. Önceki notlar korundu; tekrar deneyebilirsiniz.'), 502
+    if not any(p.get('code') in codes for p in result.get('posts', [])):
+        return jsonify(error='Paylaşım seçilen tarihte bulunamadı. Önceki notlar korundu.'), 409
+    saved = read('nearby-notes:'+str(thread_id),{})
+    notes = {}
+    for code in codes:
+        for note in saved.get(code,{}).get(target.strftime('%Y-%m-%d'),[]): notes[note['id']]=note
+    item['nearby_notes'] = sorted(notes.values(), key=lambda n:n['timestamp'])
+    return jsonify(html=render_template('_member_notes.html', item=item), count=len(notes))

@@ -1453,3 +1453,4 @@ body.is-dragging .sortable-main-card {
 .member-note-info{margin-left:auto}.member-note-info summary{cursor:pointer;list-style:none;color:var(--accent-caramel,#c4956a);padding:2px 4px}.member-note-info summary::-webkit-details-marker{display:none}
 .member-note-info[open]{flex-basis:100%;margin-left:0}.member-note-info[open] small{display:block;margin:4px 0}
 @media(max-width:480px){.member-nearby-notes{margin:8px 12px;padding:8px 10px}.member-note-heading{gap:3px 8px}}
+.member-note-refresh-status{display:block;margin:0 20px 10px;color:var(--muted-foreground,#bba890);font-size:12px;overflow-wrap:anywhere}

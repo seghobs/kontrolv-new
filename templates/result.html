@@ -195,24 +195,11 @@
                                 <button type="button" class="btn btn-sm btn-info-action" onclick="window.showPostDetailsModal('{{ loop.index }}')" title="Gönderi Detayları">
                                     <i class="fas fa-info-circle"></i><span>Detaylar</span>
                                 </button>
+                                {% if thread_id and post_code %}<button type="button" class="btn btn-sm btn-info-action" data-refresh-notes="{{ post_code }}" data-link="{{ item.post_link }}"><i class="fas fa-rotate" aria-hidden="true"></i><span>Notları yenile</span></button>{% endif %}
                             </div>
                         </div>
 
-                        {% if item.nearby_notes %}
-                        <aside class="member-nearby-notes" aria-label="Üyenin notu">
-                            {% for note in item.nearby_notes %}
-                            <div class="member-nearby-note">
-                                <div class="member-note-heading">
-                                    {% if loop.first %}<strong><i class="far fa-comment" aria-hidden="true"></i> Üyenin notu</strong>{% endif %}
-                                    <small>@{{ note.username or 'Gruba gönderen üye' }} · {{ note.time }}</small>
-                                    {% if loop.first %}<details class="member-note-info"><summary aria-label="Üye notu hakkında bilgi"><i class="fas fa-info-circle" aria-hidden="true"></i></summary><small>Paylaşımın 30 dakika öncesi veya sonrasındaki mesajlar. Saatler Türkiye saatidir. Kontrol türünü değiştirmez.</small></details>{% endif %}
-                                </div>
-                                <p>{{ note.text }}</p>
-                                {% if note.ambiguous %}<small>Mesaj birden fazla paylaşıma eşit yakınlıkta; hangi paylaşım için yazıldığını kontrol edin.</small>{% endif %}
-                            </div>
-                            {% endfor %}
-                        </aside>
-                        {% endif %}
+                        <div class="member-note-slot">{% include '_member_notes.html' %}</div>
 
                         <div id="eksiklerSection-{{ loop.index }}" class="result-section-content collapsed">
                             {% if item.skipped_reason %}
@@ -808,6 +795,6 @@
     </script>
 
     {% include "_select_modal.html" %}
-<script src="{{ url_for('static',filename='js/preset_reports.js') }}"></script></body>
+<script src="{{ url_for('static',filename='js/preset_reports.js') }}"></script><script src="{{ url_for('static',filename='js/member_notes.js') }}"></script></body>
 
 </html>
