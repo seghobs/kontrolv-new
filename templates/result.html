@@ -200,15 +200,17 @@
 
                         {% if item.nearby_notes %}
                         <aside class="member-nearby-notes" aria-label="Üyenin notu">
-                            <strong><i class="far fa-comment" aria-hidden="true"></i> Üyenin notu</strong>
                             {% for note in item.nearby_notes %}
                             <div class="member-nearby-note">
-                                <small>@{{ note.username or 'Gruba gönderen üye' }} · {{ note.time }} · Türkiye saati</small>
+                                <div class="member-note-heading">
+                                    {% if loop.first %}<strong><i class="far fa-comment" aria-hidden="true"></i> Üyenin notu</strong>{% endif %}
+                                    <small>@{{ note.username or 'Gruba gönderen üye' }} · {{ note.time }}</small>
+                                    {% if loop.first %}<details class="member-note-info"><summary aria-label="Üye notu hakkında bilgi"><i class="fas fa-info-circle" aria-hidden="true"></i></summary><small>Paylaşımın 30 dakika öncesi veya sonrasındaki mesajlar. Saatler Türkiye saatidir. Kontrol türünü değiştirmez.</small></details>{% endif %}
+                                </div>
                                 <p>{{ note.text }}</p>
                                 {% if note.ambiguous %}<small>Mesaj birden fazla paylaşıma eşit yakınlıkta; hangi paylaşım için yazıldığını kontrol edin.</small>{% endif %}
                             </div>
                             {% endfor %}
-                            <small>Gruba gönderen üyenin paylaşımına 30 dakika içindeki yakın mesajlarıdır. Kontrol türünü değiştirmez.</small>
                         </aside>
                         {% endif %}
 
