@@ -1205,7 +1205,8 @@ def group_control_preferences(thread_id):
         mode = data.get('control_mode')
         if mode not in ('comments','likes','saves'):
             mode = GROUP_CONTROL_DEFAULTS.get(thread_id, 'comments')
-        return jsonify(ok=True, preferences={f: data.get(f) is True for f in fields}, control_mode=mode)
+        from app_core.followup import read
+        return jsonify(ok=True, preferences={f: data.get(f) is True for f in fields}, control_mode=mode, selected_date=read('selected-post-date:'+thread_id, None))
     except Exception:
         logger.exception('Grup kontrol tercihleri kaydedilemedi/okunamadı')
         return jsonify(ok=False, error='Grup tercihleri alınamadı veya kaydedilemedi. Tekrar deneyin.'), 503

@@ -840,7 +840,7 @@ window.filterResultDropdown = filterResultDropdown;
 window.togglePostSelectorCard = togglePostSelectorCard;
 
 let changingCheckedPost = false;
-async function changeCheckedPost(newUrl, selectedDay) {
+async function changeCheckedPost(newUrl, selectedDay, context) {
     if (changingCheckedPost) return;
     const selectedDate = selectedDay || document.getElementById('resultPostDate')?.value || getIstanbulDateStr();
     const form = document.getElementById('resultRefreshForm');
@@ -855,11 +855,17 @@ async function changeCheckedPost(newUrl, selectedDay) {
     if (status) status.textContent = '';
     try {
         const selected = await fetch('/api/save_selected_post', {method:'POST', headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({thread_id:window.resultThreadId, date:selectedDate, post_url:newUrl})});
+            body:JSON.stringify({thread_id:context?.threadId || window.resultThreadId, date:selectedDate, post_url:newUrl})});
         const selection = await selected.json();
         if (!selected.ok || !selection.success) throw new Error('Paylaşım seçimi kaydedilemedi.');
         const body = new FormData(form);
         body.set('post_link', newUrl); body.set('selected_date', selectedDate);
+        if (context) {
+            body.set('thread_id', context.threadId);body.set('grup_uye',context.members.join('\n'));
+            body.set('control_mode',context.mode);body.set('check_likes',context.mode==='likes'?'on':'');
+            body.set('low_likes',context.lowLikes?'on':'');body.delete('post_senders');
+            body.append('post_senders',newUrl+'|'+context.sender);
+        }
         const queued = await fetch('/', {method:'POST', headers:{Accept:'application/json'}, body});
         const job = await queued.json();
         if (!queued.ok || !job.success || !job.job_id) throw new Error(job.message || 'Kontrol başlatılamadı.');

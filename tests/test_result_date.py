@@ -21,3 +21,8 @@ class PostDateTests(unittest.TestCase):
   with patch('app_core.init_storage'):c=create_app().test_client()
   with patch('app_core.routes.main.fetch_group_media_with_failover',return_value={'ok':True,'posts':[]}):c.get('/api/get_group_posts/g?date=2026-10-06')
   self.assertEqual(read('selected-post-date:g'),'2026-10-06')
+
+ def test_group_preferences_exposes_last_selected_date(self):
+  write('selected-post-date:g','2026-10-07')
+  with patch('app_core.init_storage'):client=create_app().test_client()
+  self.assertEqual(client.get('/api/group_control_preferences/g').json['selected_date'],'2026-10-07')

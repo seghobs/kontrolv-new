@@ -100,6 +100,7 @@
                                     <span>Paylaşımı Değiştir</span>
                                 </button>
                             </div>
+                            {% if thread_id %}<button type="button" class="result-action-btn primary" data-change-group><i class="fas fa-users" aria-hidden="true"></i><span>Grubu Değiştir</span></button>{% endif %}
                         </div>
                     </div>
 
@@ -800,6 +801,6 @@
     </script>
 
     {% include "_select_modal.html" %}
-<script src="{{ url_for('static',filename='js/preset_reports.js') }}"></script><script src="{{ url_for('static',filename='js/member_notes.js') }}"></script></body>
+<script src="{{ url_for('static',filename='js/preset_reports.js') }}"></script><script src="{{ url_for('static',filename='js/member_notes.js') }}"></script><script src="{{ url_for('static',filename='js/result_group.js') }}"></script></body>
 
 </html>
