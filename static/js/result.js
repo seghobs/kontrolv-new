@@ -772,10 +772,10 @@ function toggleResultDropdown(id) {
     if (!trigger || !menu) return;
     
     // Diğer açık dropdownları kapat
-    document.querySelectorAll('.dropdown-menu').forEach(m => {
+    document.querySelectorAll('.dropdown-menu:not(.coffee-select-dialog)').forEach(m => {
         if (m !== menu) m.classList.remove('show');
     });
-    document.querySelectorAll('.dropdown-trigger').forEach(t => {
+    document.querySelectorAll('.dropdown-trigger:not(.coffee-select-trigger)').forEach(t => {
         if (t !== trigger) t.classList.remove('active');
     });
     
@@ -798,8 +798,8 @@ function filterResultDropdown(dropdownId, value) {
 // Click outside helper
 window.addEventListener("click", (e) => {
     if (!e.target.closest('.custom-dropdown')) {
-        document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
-        document.querySelectorAll('.dropdown-trigger').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.dropdown-menu:not(.coffee-select-dialog)').forEach(m => m.classList.remove('show'));
+        document.querySelectorAll('.dropdown-trigger:not(.coffee-select-trigger)').forEach(t => t.classList.remove('active'));
     }
 });
 

@@ -34,7 +34,7 @@
     }
     function close() {
         if (!active) return;
-        dialog.hidePopover();dialog.classList.remove('show');returnFocus?.classList.remove('active');
+        if(dialog.isConnected && dialog.matches(':popover-open'))dialog.hidePopover();dialog.classList.remove('show');returnFocus?.classList.remove('active');
         returnFocus?.setAttribute('aria-expanded','false');active=null;
     }
     function position() {
@@ -82,6 +82,11 @@
     }
     function open(select) {
         if (select.disabled || !select.isConnected) return;
+        if (active) close();
+        // A modal makes every node outside it inert, including top-layer popovers.
+        // Keep the picker inside the modal that owns its select.
+        const owner = select.closest('dialog[open]') || document.body;
+        if (dialog.parentElement !== owner) owner.appendChild(dialog);
         active = select;returnFocus = controls.get(select);
         dialog.setAttribute('aria-label',label(select));
         search.value = '';
