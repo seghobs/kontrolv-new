@@ -44,7 +44,7 @@
    const context={threadId:loaded.threadId,members:loaded.members,mode:mode.value,lowLikes:loaded.lowLikes,sender:selected.username||''};
    const day=loaded.date,url=selected.url;dialog.close();void changeCheckedPost(url,day,context);
   };
-  try{const data=await api('/api/get_groups');if(!dialog.isConnected)return;group.replaceChildren(new Option('-- Grup Seç --',''));for(const g of data.groups||[])group.add(new Option(g.name,String(g.id)));group.value=window.resultThreadId||'';if(group.value)await load(true);else status.textContent='Bir grup seçin.';}
+  try{const data=await api('/api/get_groups');if(!dialog.isConnected)return;group.replaceChildren(new Option('-- Grup Seç --',''));for(const g of data.groups||[]){const option=new Option(g.name+(g.member_count!=null?' ('+g.member_count+' üye)':''),String(g.id));if(g.group_pic_url)option.dataset.image=g.group_pic_url;group.add(option);}group.value=window.resultThreadId||'';if(group.value)await load(true);else status.textContent='Bir grup seçin.';}
   catch(error){status.textContent=error.message;group.replaceChildren(new Option('Gruplar yüklenemedi',''));}
  });
 })();

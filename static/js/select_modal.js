@@ -55,7 +55,10 @@
             row.disabled = active.disabled || option.disabled || !!group?.disabled;
             row.setAttribute('aria-pressed', String(option.selected));
             const text = document.createElement('span');text.className = 'coffee-select-option-label';text.textContent = option.textContent;
-            const check = document.createElement('span');check.className = 'coffee-select-check';check.setAttribute('aria-hidden','true');check.textContent = option.selected ? '✓' : '';
+            const check = document.createElement('span');check.className = 'coffee-select-check';check.setAttribute('aria-hidden','true');check.className += ' fas fa-check';
+            if(option.dataset.image){const image=document.createElement('img');image.src=option.dataset.image;image.className='coffee-select-thumbnail';image.referrerPolicy='no-referrer';image.alt='';image.addEventListener('error',()=>image.remove());row.append(image);}
+            else if(active.matches('[data-group],[data-mode]')){const icon=document.createElement('i');icon.className='fas '+(active.matches('[data-group]')?'fa-users':option.value==='likes'?'fa-heart':'fa-comment');icon.setAttribute('aria-hidden','true');row.append(icon);}
+            check.hidden=!option.selected;
             row.append(text,check);row.dataset.index = index;
             row.addEventListener('click', () => {
                 const select = active;
@@ -109,7 +112,7 @@
         // Existing group/post pickers already have custom interfaces.
         if (controls.has(select) || select.matches('.hidden-select,[hidden],[data-native-select]') || getComputedStyle(select).display==='none') return;
         const button = document.createElement('button');button.type='button';button.className='dropdown-trigger coffee-select-trigger';
-        const text=document.createElement('span');text.className='dropdown-text';const arrow=document.createElement('b');arrow.textContent='⌄';arrow.setAttribute('aria-hidden','true');button.append(text,arrow);
+        const text=document.createElement('span');text.className='dropdown-text';const arrow=document.createElement('i');arrow.className='fas fa-chevron-down dropdown-arrow';arrow.setAttribute('aria-hidden','true');button.append(text,arrow);
         button.setAttribute('aria-haspopup','true');button.setAttribute('aria-expanded','false');
         controls.set(select,button);select.after(button);select.classList.add('coffee-select-native');select.tabIndex=-1;select.setAttribute('aria-hidden','true');
         button.onclick=()=>active===select?close():open(select);

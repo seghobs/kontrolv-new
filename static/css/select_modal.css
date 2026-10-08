@@ -20,3 +20,13 @@ body button.coffee-select-trigger:hover{background:rgba(196,149,106,.08);border-
 body button.coffee-select-trigger.active{background:rgba(196,149,106,.12);border-color:rgba(196,149,106,.35);box-shadow:0 0 0 3px rgba(196,149,106,.1)}
 body .coffee-select-dialog input.dropdown-search{margin:8px!important;width:calc(100% - 16px)!important;padding:10px 14px!important;min-height:0!important;border:1px solid var(--border)!important;border-radius:8px!important;background:rgba(196,149,106,.04)!important;color:var(--foreground);font-size:13px;font-weight:400;outline:none!important;box-shadow:none!important}
 body .coffee-select-dialog input.dropdown-search:focus{background:rgba(196,149,106,.08)!important;border-color:rgba(196,149,106,.35)!important}
+
+/* Match the main form picker on every page, including native modal dialogs. */
+body button.coffee-select-trigger{min-height:48px;background:#100c09;color:#eee0d0;border-color:#c4956a33;font-size:13px}
+body button.coffee-select-trigger:hover{border-color:#c4956a88;background:#19120d}
+body .coffee-select-dialog:popover-open{background:#1b150f;border:1px solid #c4956a55;border-radius:14px;box-shadow:var(--shadow-premium);transform:none;display:flex;flex-direction:column;overflow:hidden}
+body .coffee-select-dialog button.dropdown-option{padding:12px 14px;gap:10px;font-size:13px;color:var(--muted-foreground)}
+body .coffee-select-dialog button.dropdown-option.selected{color:var(--foreground)}
+.coffee-select-thumbnail{width:28px;height:28px;object-fit:cover;border-radius:7px;flex-shrink:0}
+.coffee-select-option>i{color:var(--accent-caramel);width:20px;flex-shrink:0}
+.coffee-select-check[hidden]{display:none!important}
