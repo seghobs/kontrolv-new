@@ -14,27 +14,27 @@ def main():
      page.locator('#togglePostSelectorBtnWrapper button').click()
      page.wait_for_function("document.getElementById('resultPostDropdownText').textContent.includes('yükleniyor')")
      page.wait_for_timeout(300)
-     assert len(calls)==2,len(calls)
+     assert len(calls)==1,len(calls)
      page.evaluate('togglePostSelectorCard()');page.wait_for_timeout(250)
      page.evaluate('togglePostSelectorCard()');page.wait_for_timeout(250)
-     assert len(calls)==2,'Reopening during load must share in-flight requests'
+     assert len(calls)==1,'Reopening during load must share in-flight requests'
      for route in pending:route.fulfill(json={'ok':True,'posts':[{'url':'https://www.instagram.com/p/TestPost/','username':'test_member','date':'08.10.2026'}]})
      pending.clear()
      page.locator('#resultPostDropdownOptions .dropdown-option').wait_for()
      assert page.locator('#resultPostSelectorContainer').is_visible(),'Late response must not close selector'
      assert page.locator('#resultPostDropdownOptions .dropdown-option').count()==1
      page.evaluate('togglePostSelectorCard()');page.wait_for_timeout(250);page.evaluate('togglePostSelectorCard()');page.wait_for_timeout(250)
-     assert len(calls)==2,'Reuse successful list in current page'
+     assert len(calls)==1,'Reuse successful list in current page'
      assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
-     page.reload(wait_until='networkidle');assert len(calls)==2
+     page.reload(wait_until='networkidle');assert len(calls)==1
      page.locator('#togglePostSelectorBtnWrapper button').click();page.wait_for_timeout(250)
-     assert len(pending)==2
+     assert len(pending)==1
      for route in pending:route.fulfill(status=503,json={'ok':False})
      pending.clear()
      page.get_by_role('button',name='Tekrar dene',exact=True).wait_for()
      assert page.locator('.result-header-title').is_visible()
      page.get_by_role('button',name='Tekrar dene',exact=True).click();page.wait_for_timeout(250)
-     assert len(pending)==2
+     assert len(pending)==1
      for route in pending:route.fulfill(json={'ok':True,'posts':[]})
      page.wait_for_function("document.getElementById('resultPostDropdownOptions').textContent.includes('bulunamadı')")
      assert page.locator('#resultPostSelectorContainer').is_visible()

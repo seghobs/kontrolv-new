@@ -137,6 +137,8 @@ def get_group_posts(thread_id):
         except Exception:
             target_date = now
     
+    from app_core.followup import write
+    write('selected-post-date:'+thread_id, target_date.strftime('%Y-%m-%d'))
     result = fetch_group_media_with_failover(thread_id, target_date, complete=True)
     if result.get('ok'):
         from app_core.followup import write, read, link_key
@@ -624,10 +626,18 @@ def result_page_new(post_code):
         copy_reports = {mode: missing_text(report) for mode, report in reports(result).items()}
         if result.get('dual_check'):
             result = result['like_report'] if request.args.get('mode') == 'likes' else result['comment_report']
+        from app_core.followup import read, link_key
+        chosen_date = read('selected-post-date:'+str(result.get('thread_id')), None) or result.get('selected_date')
+        if not chosen_date:
+            stamps = read('shared-dates:'+str(result.get('thread_id')), {})
+            first = next(iter(result.get('links') or []), {})
+            try: chosen_date = datetime.datetime.fromisoformat(stamps.get(link_key(first.get('post_link','')), '').replace('Z','+00:00')).astimezone(pytz.timezone('Europe/Istanbul')).strftime('%Y-%m-%d')
+            except (ValueError, AttributeError): chosen_date = datetime.datetime.now(pytz.timezone('Europe/Istanbul')).strftime('%Y-%m-%d')
         from app_core.member_notes import attach_notes
         attach_notes(result.get('thread_id'), result.get('links'))
         return render_template(
             "result.html",
+            selected_date=chosen_date,
             dual_check=full_result.get('dual_check', False),
             copy_reports=copy_reports,
             added_posts=full_result.get('added_posts'),
@@ -751,6 +761,16 @@ def index():
             "check_likes": check_likes,
             "low_likes": request.form.get("low_likes") == "on" if mode in ("comments", "likes") else check_likes
         }
+        selected_date = request.form.get('selected_date', '').strip()
+        if selected_date:
+            now = datetime.datetime.now(pytz.timezone('Europe/Istanbul'))
+            if selected_date in ('today','yesterday'): selected_date = (now - datetime.timedelta(days=selected_date=='yesterday')).strftime('%Y-%m-%d')
+            try: datetime.datetime.strptime(selected_date, '%Y-%m-%d')
+            except ValueError: return invalid_input('Geçersiz paylaşım tarihi.')
+            inputs['selected_date'] = selected_date
+            if thread_id:
+                from app_core.followup import write
+                write('selected-post-date:'+thread_id, selected_date)
         from app_core.jobs import enqueue
         job_id = enqueue('manual', inputs)
         if request.accept_mimetypes.best == 'application/json':

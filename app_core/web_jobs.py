@@ -48,7 +48,9 @@ def execute_claimed(job):
                 checkpoints[url] = row
                 write(checkpoint_key, checkpoints)
             payload['save_checkpoint'] = checkpoint
+            selected_date = payload.pop('selected_date', None)
             result = run_manual_control(**payload)
+            if selected_date: result['selected_date'] = selected_date
             if parent and (parent['result'] or {}).get('report_scope'):
                 result['report_scope'] = parent['result']['report_scope']
         elif job['kind'] == 'member':

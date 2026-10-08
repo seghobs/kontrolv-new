@@ -1454,3 +1454,6 @@ body.is-dragging .sortable-main-card {
 .member-note-info[open]{flex-basis:100%;margin-left:0}.member-note-info[open] small{display:block;margin:4px 0}
 @media(max-width:480px){.member-nearby-notes{margin:8px 12px;padding:8px 10px}.member-note-heading{gap:3px 8px}}
 .member-note-refresh-status{display:block;margin:0 20px 10px;color:var(--muted-foreground,#bba890);font-size:12px;overflow-wrap:anywhere}
+
+.result-post-date-label{display:block;font-size:12px;color:var(--muted-foreground,#bba890);margin-bottom:6px}
+.result-post-date{display:block;width:100%;max-width:250px;margin-bottom:14px;padding:10px 12px;background:#19120c;color:#f5ede4;border:1px solid rgba(196,149,106,.4);border-radius:10px;color-scheme:dark;font:inherit}

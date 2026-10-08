@@ -659,8 +659,20 @@ window.onload = function onLoad() {
 
 let resultPostsLoading = false;
 let resultPostsLoaded = false;
+let resultPostsDate = '';
+let resultPostsVersion = 0;
+function changeResultPostDate() {
+    resultPostsLoaded = false;
+    loadResultGroupPosts();
+}
 function loadResultGroupPosts() {
-    if (resultPostsLoading || resultPostsLoaded) return;
+    const dateInput = document.getElementById('resultPostDate');
+    const day = dateInput?.value || getIstanbulDateStr();
+    if (dateInput && !dateInput.value) dateInput.value = day;
+    if (resultPostsDate === day && (resultPostsLoading || resultPostsLoaded)) return;
+    resultPostsDate = day;
+    resultPostsLoaded = false;
+    const revision = ++resultPostsVersion;
     if (window.resultThreadId) {
         const dropdownTextEl = document.getElementById("resultPostDropdownText");
         const optionsEl = document.getElementById("resultPostDropdownOptions");
@@ -676,23 +688,12 @@ function loadResultGroupPosts() {
                 if (!response.ok || !data.ok) throw new Error('Paylaşımlar alınamadı.');
                 return data;
             };
-            return Promise.all([
-                loadDay('yesterday'),
-                loadDay('today')
-            ])
-            .then(([resYest, resToday]) => {
+            return loadDay(day)
+            .then(data => {
+                if (revision !== resultPostsVersion) return;
                 resultPostsLoaded = true;
                 dropdownTextEl.textContent = '-- Paylaşım Seç --';
-                const postsYest = (resYest && resYest.posts) || [];
-                const postsToday = (resToday && resToday.posts) || [];
-                
-                // Tekilleştirme
-                const allPostsMap = new Map();
-                postsToday.forEach(p => allPostsMap.set(p.url, p));
-                postsYest.forEach(p => allPostsMap.set(p.url, p));
-                
-                const combinedPosts = Array.from(allPostsMap.values());
-                
+                const combinedPosts = Array.from(new Map((data.posts || []).map(p => [p.url, p])).values());
                 if (combinedPosts.length > 0) {
                     optionsEl.innerHTML = "";
                     
@@ -736,18 +737,19 @@ function loadResultGroupPosts() {
                                 mainContainer.style.display = "none";
                             }
                             
-                            changeCheckedPost(p.url);
+                            changeCheckedPost(p.url, day);
                         });
                         
                         optionsEl.appendChild(div);
                     });
                     
                 } else {
-                    dropdownTextEl.textContent = 'Dün ve bugün paylaşım yok';
-                    optionsEl.textContent = 'Bu grupta dün ve bugün için paylaşım bulunamadı.';
+                    dropdownTextEl.textContent = 'Bu tarihte paylaşım yok';
+                    optionsEl.textContent = 'Seçilen tarihte gruba gönderilen paylaşım bulunamadı.';
                 }
             })
             .catch(() => {
+                if (revision !== resultPostsVersion) return;
                 dropdownTextEl.textContent = 'Paylaşımlar yüklenemedi';
                 optionsEl.replaceChildren();
                 const retry = document.createElement('button');
@@ -757,7 +759,7 @@ function loadResultGroupPosts() {
                 retry.addEventListener('click', loadResultGroupPosts);
                 optionsEl.appendChild(retry);
             })
-            .finally(() => { resultPostsLoading = false; });
+            .finally(() => { if (revision === resultPostsVersion) resultPostsLoading = false; });
         }
     }
 }
@@ -837,8 +839,10 @@ window.toggleResultDropdown = toggleResultDropdown;
 window.filterResultDropdown = filterResultDropdown;
 window.togglePostSelectorCard = togglePostSelectorCard;
 
-function changeCheckedPost(newUrl) {
-    const todayStr = getIstanbulDateStr();
+function changeCheckedPost(newUrl, selectedDay) {
+    const selectedDate = selectedDay || document.getElementById('resultPostDate')?.value || getIstanbulDateStr();
+    const dateField = document.getElementById('refreshSelectedDate');
+    if (dateField) dateField.value = selectedDate;
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     
     fetch("/api/save_selected_post", {
@@ -849,7 +853,7 @@ function changeCheckedPost(newUrl) {
         },
         body: JSON.stringify({
             thread_id: window.resultThreadId,
-            date: todayStr,
+            date: selectedDate,
             post_url: newUrl
         })
     })

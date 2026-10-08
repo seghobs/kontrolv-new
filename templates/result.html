@@ -138,6 +138,8 @@
                             </div>
         
                             <div id="resultPostSelectorBody" class="result-section-content collapsed">
+                                <label class="result-post-date-label" for="resultPostDate">Gruba gönderildiği tarih</label>
+                                <input type="date" id="resultPostDate" class="result-post-date" value="{{ selected_date or '' }}" onchange="changeResultPostDate()">
                                 <div class="custom-dropdown" id="resultPostDropdown">
                                     <button type="button" class="dropdown-trigger" onclick="toggleResultDropdown('resultPostDropdown')">
                                         <span class="dropdown-text" id="resultPostDropdownText">-- Paylaşım Yükleniyor... --</span>
@@ -525,6 +527,7 @@
 
     <!-- Gizli POST Gönderim Formu -->
     <form id="resultRefreshForm" method="post" action="/" style="display: none;">
+        <input type="hidden" name="selected_date" id="refreshSelectedDate" value="{{ selected_date or '' }}">
         <input type="hidden" name="post_link" id="refreshPostLink" value="">
         <input type="hidden" name="grup_uye" id="refreshGrupUye" value="{{ group|join(' ') }}">
         <input type="hidden" name="thread_id" id="refreshThreadId" value="{{ thread_id }}">
