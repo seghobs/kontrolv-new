@@ -635,8 +635,11 @@ def result_page_new(post_code):
             except (ValueError, AttributeError): chosen_date = datetime.datetime.now(pytz.timezone('Europe/Istanbul')).strftime('%Y-%m-%d')
         from app_core.member_notes import attach_notes
         attach_notes(result.get('thread_id'), result.get('links'))
-        return render_template(
+        from app_core.jobs import get_job
+        source_job = get_job(post_code) or {}
+        rendered = render_template(
             "result.html",
+            low_likes_enabled=(source_job.get('payload') or {}).get('low_likes', result.get('check_likes', False)),
             selected_date=chosen_date,
             dual_check=full_result.get('dual_check', False),
             copy_reports=copy_reports,
@@ -654,6 +657,13 @@ def result_page_new(post_code):
             is_loading=False
         )
         
+        if request.args.get('fragment') == '1':
+            details = {str(i): {**p, 'link':p.get('post_link','')} for i,p in enumerate(result.get('links') or [], 1)}
+            return jsonify(html=rendered, state=dict(postCode=post_code, resultThreadId=result.get('thread_id') or '',
+                checkedPostUrl=next(iter(result.get('links') or []),{}).get('post_link',''),
+                userComments=result.get('user_comments') or {}, invalidCommentUsers=result.get('invalid_comment_users') or [], postDetailsData=details))
+        return rendered
+
     elif status == "running":
         return redirect(url_for('main.index', task=post_code))
 

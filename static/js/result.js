@@ -839,53 +839,77 @@ window.toggleResultDropdown = toggleResultDropdown;
 window.filterResultDropdown = filterResultDropdown;
 window.togglePostSelectorCard = togglePostSelectorCard;
 
-function changeCheckedPost(newUrl, selectedDay) {
+let changingCheckedPost = false;
+async function changeCheckedPost(newUrl, selectedDay) {
+    if (changingCheckedPost) return;
     const selectedDate = selectedDay || document.getElementById('resultPostDate')?.value || getIstanbulDateStr();
-    const dateField = document.getElementById('refreshSelectedDate');
-    if (dateField) dateField.value = selectedDate;
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    
-    fetch("/api/save_selected_post", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": csrfToken
-        },
-        body: JSON.stringify({
-            thread_id: window.resultThreadId,
-            date: selectedDate,
-            post_url: newUrl
-        })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            // İlerleme overlay'ini göster
-            const overlay = document.getElementById("progressOverlay");
-            if (overlay) {
-                overlay.style.display = "flex";
-                void overlay.offsetHeight;
-                overlay.classList.add("show");
-            }
-            
-            // Gizli formu doldur ve gönder
-            const refreshPostLink = document.getElementById("refreshPostLink");
-            if (refreshPostLink) {
-                refreshPostLink.value = newUrl;
-            }
-            
-            const form = document.getElementById("resultRefreshForm");
-            if (form) {
-                form.submit();
-            }
-        } else {
-            alert("Paylaşım seçimi kaydedilemedi.");
+    const form = document.getElementById('resultRefreshForm');
+    const overlay = document.getElementById('progressOverlay');
+    const progressText = document.getElementById('progressText');
+    const status = document.getElementById('loading-message');
+    if (!form) return;
+    changingCheckedPost = true;
+    let progressTimer;
+    if (overlay) { overlay.style.display = 'flex'; overlay.classList.add('show'); }
+    if (progressText) progressText.textContent = 'Yeni paylaşım kontrol ediliyor…';
+    if (status) status.textContent = '';
+    try {
+        const selected = await fetch('/api/save_selected_post', {method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({thread_id:window.resultThreadId, date:selectedDate, post_url:newUrl})});
+        const selection = await selected.json();
+        if (!selected.ok || !selection.success) throw new Error('Paylaşım seçimi kaydedilemedi.');
+        const body = new FormData(form);
+        body.set('post_link', newUrl); body.set('selected_date', selectedDate);
+        const queued = await fetch('/', {method:'POST', headers:{Accept:'application/json'}, body});
+        const job = await queued.json();
+        if (!queued.ok || !job.success || !job.job_id) throw new Error(job.message || 'Kontrol başlatılamadı.');
+        const id = encodeURIComponent(job.job_id);
+        progressTimer = setInterval(async () => {
+            try {
+                const r = await fetch(`/api/task_status/${id}`, {cache:'no-store'});
+                const data = await r.json();
+                if (progressText && data.message) progressText.textContent = data.message;
+            } catch (_) { /* The execution request remains the source of truth. */ }
+        }, 1500);
+        let outcome;
+        while (true) {
+            const run = await fetch(`/api/task_run/${id}`, {method:'POST'});
+            outcome = await run.json();
+            if (!run.ok) throw new Error(outcome.error || 'Kontrol çalıştırılamadı.');
+            if (['completed','failed','cancelled'].includes(outcome.status)) break;
+            await new Promise(resolve => setTimeout(resolve, 1500));
         }
-    })
-    .catch(err => {
-        console.error("Paylaşım değiştirme hatası:", err);
-        alert("Bağlantı hatası oluştu.");
-    });
+        clearInterval(progressTimer);
+        if (outcome.status !== 'completed') throw new Error(outcome.error || outcome.message || 'Kontrol tamamlanamadı. Önceki rapor korundu.');
+        const response = await fetch(`/result/${id}?fragment=1`, {cache:'no-store',headers:{Accept:'application/json'}});
+        const fresh = await response.json();
+        if (!response.ok || !fresh.html || !fresh.state) throw new Error('Yeni sonuç yüklenemedi.');
+        const next = new DOMParser().parseFromString(fresh.html, 'text/html');
+        if (!next.querySelector('.result-header-title')) throw new Error('Yeni rapor yüklenemedi.');
+        const initializers = [...next.querySelectorAll('script[src]')].filter(script =>
+            ['/static/js/comment_previews.js','/static/js/member_analysis.js','/static/js/preset_reports.js'].includes(new URL(script.src, location.href).pathname)).map(script => script.src);
+        next.querySelectorAll('script:not([type="application/json"])').forEach(script => script.remove());
+        const scroll = window.scrollY;
+        Object.assign(window, fresh.state);
+        document.body.replaceChildren(...next.body.childNodes);
+        document.body.className = next.body.className;
+        window.history.replaceState(null, '', `/result/${id}`);
+        resultPostsLoaded = false; resultPostsLoading = false; resultPostsDate = ''; ++resultPostsVersion;
+        if (typeof window.onload === 'function') window.onload();
+        document.dispatchEvent(new Event('DOMContentLoaded'));
+        for (const src of initializers) {
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');script.src = src;
+                script.onload = resolve;script.onerror = reject;document.body.appendChild(script);
+            });
+        }
+        window.scrollTo(0, scroll);
+    } catch (error) {
+        if (status) status.textContent = error.message || 'Paylaşım değiştirilemedi. Önceki rapor korundu.';
+        if (overlay) { overlay.classList.remove('show'); overlay.style.display = 'none'; }
+    } finally {
+        clearInterval(progressTimer); changingCheckedPost = false;
+    }
 }
 
 function getIstanbulDateStr() {

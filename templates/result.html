@@ -531,6 +531,8 @@
         <input type="hidden" name="post_link" id="refreshPostLink" value="">
         <input type="hidden" name="grup_uye" id="refreshGrupUye" value="{{ group|join(' ') }}">
         <input type="hidden" name="thread_id" id="refreshThreadId" value="{{ thread_id }}">
+        <input type="hidden" name="low_likes" value="{{ 'on' if low_likes_enabled else '' }}">
+        <input type="hidden" name="control_mode" value="{{ 'likes' if check_likes else 'comments' }}">
         <input type="hidden" name="check_likes" id="refreshCheckLikes" value="{% if check_likes %}on{% endif %}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     </form>
