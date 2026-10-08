@@ -387,7 +387,7 @@ body.page-transitioning-out {
 
 /* Responsive list items & Groups */
 .result-section-content {
-    padding: 16px 20px 20px 20px !important;
+    padding: 16px 20px 20px 20px;
     background: transparent !important;
     overflow: hidden !important;
     box-sizing: border-box;
@@ -395,10 +395,10 @@ body.page-transitioning-out {
 
 .result-section-content.collapsed {
     display: none !important;
-    height: 0 !important;
-    opacity: 0 !important;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
+    height: 0;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
     margin-top: 0 !important;
     margin-bottom: 0 !important;
 }
@@ -1437,8 +1437,8 @@ body.is-dragging .sortable-main-card {
 #resultPostSelectorContainer .result-section-content.collapsed {
     overflow: hidden !important;
     max-height: 0 !important;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
+    padding-top: 0;
+    padding-bottom: 0;
     opacity: 0 !important;
     pointer-events: none !important;
 }

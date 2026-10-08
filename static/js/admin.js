@@ -56,48 +56,8 @@ function showAlert(message, type = "success") {
     }, 5000);
 }
 
-// Keep logical state immediate and reverse from the current rendered height.
-function animateAdminPanel(el, open) {
-    if (!el) return;
-    const height = el.getBoundingClientRect().height;
-    const opacity = getComputedStyle(el).opacity;
-    if (el._timer) clearTimeout(el._timer);
-    el._panelAnimation?.cancel();
-    el.classList.add('panel-animating');
-    el.classList.toggle('collapsed', !open);
-    el.inert = !open;
-    el.style.maxHeight = 'none';
-    el.style.height = '';
-    el.style.opacity = '';
-    const target = open ? el.scrollHeight : 0;
-    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const finish = () => {
-        el.classList.remove('panel-animating');
-        el.style.maxHeight = open ? 'none' : '';
-        el.style.height = '';
-        el.style.opacity = '';
-        el._panelAnimation = null;
-    };
-    if (reduced || !el.animate) { finish(); return; }
-    const animation = el.animate(
-        [{height: height + 'px', opacity}, {height: target + 'px', opacity: open ? 1 : 0}],
-        {duration: 260, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'both'}
-    );
-    el._panelAnimation = animation;
-    animation.onfinish = () => {
-        if (el._panelAnimation !== animation) return;
-        finish();
-        animation.cancel();
-    };
-    if (!el._panelObserver) {
-        el._panelObserver = new MutationObserver(() => {
-            if (el._panelAnimation && !el.classList.contains('collapsed')) animateAdminPanel(el, true);
-        });
-        el._panelObserver.observe(el, {childList: true, subtree: true, characterData: true});
-    }
-}
-function slideDown(el) { animateAdminPanel(el, true); }
-function slideUp(el) { animateAdminPanel(el, false); }
+function slideDown(el) { window.CoffeeUI.panel(el, true); }
+function slideUp(el) { window.CoffeeUI.panel(el, false); }
 
 function closeAllPanels(exceptId) {
     const geminiBody = document.getElementById('geminiSettingsBody');

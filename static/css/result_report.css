@@ -25,8 +25,8 @@
 .report-page .drag-handle { font-size: 12px; opacity: .4; }
 .report-page .chevron-icon { background: #c4956a08; border-color: #c4956a20; border-radius: 8px; }
 .report-page .eksikler-meta-strip { padding-left: 54px; gap: 7px; }
-.report-page .result-section-content { padding: 18px 20px 20px !important; }
-.report-page .result-section-content.collapsed { padding: 0 !important; }
+.report-page .result-section-content { padding: 18px 20px 20px; }
+.report-page .result-section-content.collapsed:not(.ui-panel-moving) { padding: 0 !important; }
 .report-page .search-input { background: #0e0b08 !important; border-color: #c4956a29 !important; border-radius: 11px !important; font-size: 12px !important; min-height: 43px; }
 .report-page .btn-copy-eksikler { width: auto !important; max-width: 100%; padding: 9px 14px !important; border-radius: 9px !important; background: #c4956a0c !important; border: 1px solid #c4956a2b !important; color: #dcc1a6 !important; font-size: 11px !important; box-shadow: none !important; }
 .report-page .btn-copy-eksikler:hover { background: #c4956a20 !important; transform: none !important; }
@@ -48,8 +48,8 @@
     .report-page .result-top-actions .result-action-btn { width: 100%; padding: 9px 6px; font-size: 10px; white-space: normal; min-height: 43px; }
     .report-page .eksikler-meta-strip { padding-left: 0; }
     .report-page .eksikler-section-header,.report-page .completed-section-header,.report-page .detayli-rapor-header { padding: 16px 14px !important; }
-    .report-page .result-section-content { padding: 15px 14px !important; }
-    .report-page .result-section-content.collapsed { padding: 0 !important; }
+    .report-page .result-section-content { padding: 15px 14px; }
+    .report-page .result-section-content.collapsed:not(.ui-panel-moving) { padding: 0 !important; }
 }
 
 /* Gentle hover feedback with consistent icon/text contrast. */

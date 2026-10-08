@@ -3,75 +3,8 @@ let pendingUsername = null;
 let pendingButton = null;
 let pendingPostLink = null;
 
-function slideDown(el) {
-    if (!el) return;
-    if (el._animating) return;
-    el._animating = true;
-    
-    el.classList.remove("collapsed");
-    el.style.setProperty("display", "block", "important");
-    el.style.overflow = "hidden";
-    el.style.height = "0px";
-    el.style.opacity = "0";
-    el.style.paddingTop = "0px";
-    el.style.paddingBottom = "0px";
-    el.style.boxSizing = "border-box";
-    
-    const targetHeight = el.scrollHeight + 36;
-    
-    requestAnimationFrame(() => {
-        el.style.transition = "height 0.32s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.28s ease, padding 0.32s cubic-bezier(0.25, 1, 0.5, 1)";
-        el.style.height = targetHeight + "px";
-        el.style.opacity = "1";
-        el.style.paddingTop = "16px";
-        el.style.paddingBottom = "20px";
-        
-        setTimeout(() => {
-            el.style.height = "auto";
-            el.style.overflow = "";
-            el.style.transition = "";
-            el.style.paddingTop = "";
-            el.style.paddingBottom = "";
-            el._animating = false;
-        }, 340);
-    });
-}
-
-function slideUp(el) {
-    if (!el) return;
-    if (el._animating) return;
-    el._animating = true;
-    
-    const currentHeight = el.scrollHeight + 36;
-    el.style.boxSizing = "border-box";
-    el.style.height = currentHeight + "px";
-    el.style.opacity = "1";
-    el.style.overflow = "hidden";
-    el.style.paddingTop = "16px";
-    el.style.paddingBottom = "20px";
-    
-    void el.offsetHeight; // Force reflow
-    
-    requestAnimationFrame(() => {
-        el.style.transition = "height 0.3s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.25s ease, padding 0.3s cubic-bezier(0.25, 1, 0.5, 1)";
-        el.style.height = "0px";
-        el.style.opacity = "0";
-        el.style.paddingTop = "0px";
-        el.style.paddingBottom = "0px";
-        
-        setTimeout(() => {
-            el.classList.add("collapsed");
-            el.style.display = "";
-            el.style.height = "";
-            el.style.opacity = "";
-            el.style.paddingTop = "";
-            el.style.paddingBottom = "";
-            el.style.overflow = "";
-            el.style.transition = "";
-            el._animating = false;
-        }, 320);
-    });
-}
+function slideDown(el) { window.CoffeeUI.panel(el, true); }
+function slideUp(el) { window.CoffeeUI.panel(el, false); }
 
 function updateEksiklerCount(index) {
     const list = document.getElementById(`eksiklerListesi-${index}`);

@@ -27,7 +27,8 @@
         const button = controls.get(select);
         if (!button) return;
         const chosen = [...select.selectedOptions].map(option => option.textContent.trim());
-        button.querySelector('span').textContent = chosen.join(', ') || 'Seçim yap';
+        const text = chosen.join(', ') || 'Seçim yap';
+        if (button.querySelector('span').textContent !== text) button.querySelector('span').textContent = text;
         button.disabled = select.disabled;
         button.setAttribute('aria-label', label(select) + ': ' + (chosen.join(', ') || 'Seçim yap'));
         button.title = chosen.join(', ');
@@ -37,16 +38,7 @@
         if(dialog.isConnected && dialog.matches(':popover-open'))dialog.hidePopover();dialog.classList.remove('show');returnFocus?.classList.remove('active');
         returnFocus?.setAttribute('aria-expanded','false');active=null;
     }
-    function position() {
-        if (!active) return;
-        const r=returnFocus.getBoundingClientRect();
-        dialog.style.width=Math.min(Math.max(r.width,220),innerWidth-16)+'px';
-        dialog.style.left=Math.max(8,Math.min(r.left,innerWidth-dialog.offsetWidth-8))+'px';
-        const below=innerHeight-r.bottom-16, above=r.top-16;
-        const height=Math.min(320,Math.max(below,above));
-        dialog.style.maxHeight=height+'px';
-        dialog.style.top=(below>=Math.min(320,dialog.scrollHeight)||below>=above?r.bottom+8:Math.max(8,r.top-dialog.offsetHeight-8))+'px';
-    }
+    function position() {if(active) window.CoffeeUI.position(dialog, returnFocus);}
     function draw() {
         if (!active) return;
         const query = search.value.trim().toLocaleLowerCase('tr');
@@ -83,6 +75,7 @@
     function open(select) {
         if (select.disabled || !select.isConnected) return;
         if (active) close();
+        document.querySelectorAll('.coffee-dropdown-menu.show').forEach(menu => menu.classList.remove('show'));
         // A modal makes every node outside it inert, including top-layer popovers.
         // Keep the picker inside the modal that owns its select.
         const owner = select.closest('dialog[open]') || document.body;
@@ -97,15 +90,21 @@
     document.addEventListener('pointerdown',event=>{if(active&&!dialog.contains(event.target)&&!returnFocus.contains(event.target))close();});
     window.addEventListener('resize',position);
     document.addEventListener('scroll',event=>{if(active&&!dialog.contains(event.target))position();},true);
-    search.addEventListener('input', draw);
-    dialog.addEventListener('keydown', event => {
-        if (event.key === 'Escape') {event.preventDefault();close();returnFocus?.focus();return;}
+    window.visualViewport?.addEventListener('resize', position);
+    window.visualViewport?.addEventListener('scroll', position);
+    window.CoffeeUI.closeSelect = close;
+    search.addEventListener('input', () => {draw();position();});
+    const selectKey = event => {
+        event.stopPropagation();
+        if (event.key === 'Escape') {event.preventDefault();event.stopPropagation();close();returnFocus?.focus();return;}
         if (!['ArrowDown','ArrowUp','Home','End'].includes(event.key) || (event.target === search && event.key !== 'ArrowDown')) return;
         const rows = [...list.querySelectorAll('button:not(:disabled)')];if (!rows.length) return;
         event.preventDefault();const index = rows.indexOf(document.activeElement);
         const next = event.key==='Home'?0:event.key==='End'?rows.length-1:event.key==='ArrowDown'?(index+1)%rows.length:(index-1+rows.length)%rows.length;
         rows[next].focus();
-    });
+    };
+    window.CoffeeUI.selectKey = selectKey;
+    dialog.addEventListener('keydown', selectKey);
     function enhance(select) {
         // Existing group/post pickers already have custom interfaces.
         if (controls.has(select) || select.matches('.hidden-select,[hidden],[data-native-select]') || getComputedStyle(select).display==='none') return;
@@ -114,6 +113,7 @@
         button.setAttribute('aria-haspopup','true');button.setAttribute('aria-expanded','false');
         controls.set(select,button);select.after(button);select.classList.add('coffee-select-native');select.tabIndex=-1;select.setAttribute('aria-hidden','true');
         button.onclick=()=>active===select?close():open(select);
+        button.addEventListener('keydown', event => {if(['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();open(select);}});
         select.addEventListener('change',()=>{sync(select);if(active===select)draw();});
         select.addEventListener('invalid',event=>{event.preventDefault();button.setAttribute('aria-invalid','true');if(!active)open(select);});
         select.addEventListener('change',()=>button.removeAttribute('aria-invalid'));
@@ -132,10 +132,20 @@
         }
     }
     scan();
+    let queued = false;
     const observer=new MutationObserver(records=>{
-        if(records.every(record=>dialog.contains(record.target)||record.target.closest?.('.coffee-select-trigger')))return;
-        scan();if(active)draw();
+        const relevant=records.some(record => {
+            if(dialog.contains(record.target)||record.target.closest?.('.coffee-select-trigger'))return false;
+            if(record.type==='attributes')return record.target.tagName==='SELECT'||record.target.tagName==='OPTION'||record.attributeName==='inert'||record.attributeName==='hidden';
+            if(record.target.closest?.('select'))return true;
+            return [...record.addedNodes,...record.removedNodes].some(node=>node.nodeType===1&&(node.matches?.('select')||node.querySelector?.('select')));
+        });
+        if(!relevant||queued)return;
+        queued=true;queueMicrotask(()=>{
+            queued=false;scan();
+            if(active){if(active.disabled||returnFocus.closest('[inert]')||!returnFocus.getClientRects().length)close();else{draw();position();}}
+        });
     });
-    observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['disabled','selected','label','hidden']});
+    observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['disabled','selected','label','hidden','inert']});
     document.addEventListener('reset',()=>setTimeout(scan,0));
 })();

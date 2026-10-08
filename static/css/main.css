@@ -1193,7 +1193,7 @@ textarea.form-control {
    LUXURY COFFEE LATTE INTERACTIVE CUSTOM CALENDAR
    ============================================================ */
 
-#dateDropdown .dropdown-menu {
+#dateDropdown .dropdown-menu:not(.coffee-dropdown-menu) {
     max-height: none !important;
     overflow: visible !important;
     min-width: 310px !important;
@@ -1201,7 +1201,7 @@ textarea.form-control {
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(196, 149, 106, 0.25) !important;
 }
 
-#dateDropdown .dropdown-options {
+#dateDropdown .dropdown-menu:not(.coffee-dropdown-menu) .dropdown-options {
     max-height: none !important;
     overflow: visible !important;
 }

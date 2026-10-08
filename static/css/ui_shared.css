@@ -1,0 +1,19 @@
+/* Shared behavior for cards and menus, preserving each page's caramel theme. */
+body :is(.section-body,.result-section-content).ui-panel-moving {display:block!important;overflow:hidden!important;max-height:none!important;box-sizing:border-box;transition:none!important}
+body .coffee-dropdown-menu:popover-open {position:fixed!important;inset:auto;margin:0;right:auto;bottom:auto;display:flex!important;flex-direction:column;transform:none!important;transition:none;box-sizing:border-box;overflow:hidden;background:#1b150f;border:1px solid #c4956a55}
+body .coffee-dropdown-menu:not(:popover-open) {display:none!important}
+.coffee-dropdown-menu::backdrop {background:transparent;pointer-events:none}
+body :is(.coffee-dropdown-menu,.coffee-select-dialog) > :is(.dropdown-search,.dropdown-search-wrapper) {flex-shrink:0}
+body :is(.coffee-dropdown-menu,.coffee-select-dialog) .dropdown-options {flex:1 1 auto;min-height:0;max-height:none;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:12px;scroll-padding-bottom:12px}
+body :is(.dropdown-trigger,.coffee-select-option,.dropdown-option):focus-visible {outline:2px solid #c4956a;outline-offset:-2px}
+body .dropdown-trigger {min-width:0;gap:10px;min-height:44px}
+body .dropdown-trigger .dropdown-text {min-width:0;flex:1;max-width:100%}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
+body :is(.modal-card,.modal-content-glass,.modal-content,.success-modal-content) {box-sizing:border-box;max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain}
+body :is(.modal-overlay,.custom-modal,.modal) {box-sizing:border-box}
+body :is(.modal-close,.modal-close-btn,.modal-close-icon-btn,.btn-close-modal,.post-modal-close-btn) {min-width:40px;min-height:40px;flex-shrink:0}
+body [role=button]:focus-visible {outline:2px solid #c4956a;outline-offset:2px}
+
+#dateDropdown .coffee-dropdown-menu:popover-open{overflow-y:auto;overscroll-behavior:contain}
+#dateDropdown .coffee-dropdown-menu .dropdown-options,#dateDropdown .coffee-dropdown-menu .custom-calendar-container{flex:0 0 auto;max-height:none}

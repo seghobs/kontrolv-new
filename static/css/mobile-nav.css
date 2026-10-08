@@ -84,6 +84,6 @@
         display: flex;
     }
     body {
-        padding-bottom: calc(300px + env(safe-area-inset-bottom, 0px)) !important; /* Space for bottom nav */
+        padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)) !important; /* Space for bottom nav */
     }
 }
