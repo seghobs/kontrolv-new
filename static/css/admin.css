@@ -563,9 +563,9 @@ body.page-transitioning-out {
 }
 
 .section-body {
-    max-height: 1500px;
+    max-height: none;
     overflow: hidden;
-    transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+    transition: none;
     opacity: 1;
 }
 
@@ -2760,3 +2760,6 @@ body.page-transitioning-out {
 
 
 
+
+/* Clip contents only while the panel height is moving. */
+body .section-body.panel-animating { overflow: hidden !important; max-height: none !important; }

@@ -1,6 +1,6 @@
-<details class="add-token-section" id="geminiSettings">
-    <summary class="section-header" style="cursor:pointer;list-style:none"><h2><i class="fas fa-wand-magic-sparkles"></i> Gemini API · Kaydet analizi</h2><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
-    <div class="section-body">
+<div class="add-token-section" id="geminiSettings">
+    <div id="geminiSettingsHeader" role="button" tabindex="0" aria-expanded="false" aria-controls="geminiSettingsBody" class="section-header" style="cursor:pointer;list-style:none"><h2><i class="fas fa-wand-magic-sparkles"></i> Gemini API · Kaydet analizi</h2><i class="fas fa-chevron-down chevron-icon" aria-hidden="true"></i></div>
+    <div id="geminiSettingsBody" class="section-body collapsed" inert>
         <p class="auto-form-label">Kaydet ekran görüntülerini analiz eden hizmetin anahtarını buradan yönetebilirsin.</p>
         <p class="auto-form-label">Model: <strong>gemma-4-26b-a4b-it</strong></p>
         <form id="geminiSettingsForm">
@@ -14,5 +14,5 @@
             <p id="geminiFeedback" role="status" aria-live="polite" style="margin-top:16px;overflow-wrap:anywhere"></p>
         </form>
     </div>
-</details>
+</div>
 <script src="{{ url_for('static',filename='js/gemini_settings.js') }}" defer></script>

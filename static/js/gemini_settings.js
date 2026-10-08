@@ -20,7 +20,24 @@
       feedback.textContent=data.configured?'Kayıtlı anahtar yüklendi. Görmek için Göster düğmesine basabilirsin.':'Henüz API anahtarı kayıtlı değil.';
     } catch(e){feedback.textContent=e.message;} finally {lock(false);}
   }
-  panel.addEventListener('toggle',()=>{if(panel.open&&!loaded) fetchKey();if(!panel.open) hide();});
+  const header = document.getElementById('geminiSettingsHeader');
+  const body = document.getElementById('geminiSettingsBody');
+  function togglePanel() {
+    const open = body.classList.contains('collapsed');
+    if (open) {closeAllPanels(body.id);slideDown(body);if(!loaded)fetchKey();}
+    else {slideUp(body);hide();}
+    header.classList.toggle('open', open);
+    header.setAttribute('aria-expanded', String(open));
+  }
+  header.addEventListener('click', togglePanel);
+  header.addEventListener('keydown', event => {
+    if (event.target===header && ['Enter',' '].includes(event.key)) {event.preventDefault();togglePanel();}
+  });
+  new MutationObserver(() => {
+    const open=!body.classList.contains('collapsed');
+    header.setAttribute('aria-expanded',String(open));header.classList.toggle('open',open);
+    if(!open)hide();
+  }).observe(body,{attributes:true,attributeFilter:['class']});
   reload.addEventListener('click',fetchKey);
   reveal.addEventListener('click',()=>{const showing=input.type==='password';input.type=showing?'text':'password';reveal.setAttribute('aria-pressed',String(showing));reveal.querySelector('span').textContent=showing?'Gizle':'Göster';});
   document.getElementById('geminiSettingsForm').addEventListener('submit',async event=>{
