@@ -48,6 +48,39 @@
  document.querySelectorAll('[data-extend]').forEach(button=>button.addEventListener('click',()=>chooseDate(button,'extend')));
  const search=document.querySelector('[data-matrix-search]'),missing=document.querySelector('[data-matrix-missing]');
  function filter(){let visible=0;document.querySelectorAll('[data-matrix-user]').forEach(row=>{row.hidden=!row.dataset.matrixUser.toLowerCase().includes(search.value.trim().replace(/^@/,'').toLowerCase())||(missing.checked&&row.dataset.hasMissing!=='yes');if(!row.hidden)visible++});const empty=document.querySelector('[data-matrix-empty]');if(empty)empty.hidden=visible>0;}
- search?.addEventListener('input',filter);missing?.addEventListener('change',filter);
+ const toolbar=document.querySelector('[data-matrix-daily]'),dayButton=document.querySelector('[data-matrix-day]'),feedback=document.querySelector('[data-matrix-feedback]');
+ let dayBusy=false;
+ async function dailyScan(resumeId){
+  if(dayBusy||!toolbar?.dataset.dailyUrl)return;
+  dayBusy=true;dayButton.disabled=true;missing.disabled=true;
+  const original=dayButton.textContent;dayButton.textContent='Günlük kontrol sürüyor…';
+  const json=async(url,options={})=>{const response=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(10000),...options});const data=await response.json();if(!response.ok)throw Error(data.error||data.message||'Sunucuya ulaşılamadı.');return data;};
+  try{
+   let identifier=resumeId;
+   if(!identifier){feedback.textContent='Günün tüm paylaşımları için kontrol hazırlanıyor…';const data=await json(toolbar.dataset.dailyUrl,{method:'POST'});identifier=data.job_id;}
+   if(!/^[a-f0-9]{32}$/.test(identifier))throw Error('Günlük kontrol başlatılamadı.');
+   const pending=new URL(location.href);pending.searchParams.set('day_job',identifier);history.replaceState(null,'',pending);
+   let runStarted=false;const started=Date.now();
+   while(Date.now()-started<180000){
+    const state=await json('/api/task_status/'+identifier);feedback.textContent=state.message||'Günün paylaşımları kontrol ediliyor…';
+    if(state.status==='completed'){
+     const target=new URL('/reports/'+identifier+'/matrix',location.origin);if(missing.checked)target.searchParams.set('missing','1');location.assign(target.href);return;
+    }
+    if(['failed','cancelled','not_found'].includes(state.status)){
+     const clean=new URL(location.href);clean.searchParams.delete('day_job');history.replaceState(null,'',clean);
+     throw Error(state.error||state.message||'Günlük kontrol tamamlanamadı. Önceki tablo korundu.');
+    }
+    if(!runStarted&&state.execute_in_request){runStarted=true;void json('/api/task_run/'+identifier,{method:'POST',signal:AbortSignal.timeout(165000)}).catch(()=>{});}
+    await new Promise(resolve=>setTimeout(resolve,1500));
+   }
+   throw Error('Kontrol sürüyor. Sayfayı yenileyerek durumunu takip edebilirsiniz.');
+  }catch(error){feedback.textContent=(error.message||'Günlük kontrol tamamlanamadı.')+' Önceki tablo korunuyor.';filter();}
+  finally{dayBusy=false;dayButton.disabled=false;missing.disabled=false;dayButton.textContent=original;}
+ }
+ search?.addEventListener('input',filter);
+ missing?.addEventListener('change',()=>{if(missing.checked&&toolbar?.dataset.matrixDaily!=='yes'&&toolbar?.dataset.dailyUrl)void dailyScan();else filter();});
+ dayButton?.addEventListener('click',()=>dailyScan(new URL(location.href).searchParams.get('day_job')));
+ if(missing){missing.checked=new URL(location.href).searchParams.get('missing')==='1';filter();const pending=new URL(location.href).searchParams.get('day_job');if(pending)void dailyScan(pending);}
+
  document.querySelectorAll('[data-matrix-time]').forEach(el=>{const date=new Date(Number(el.dataset.matrixTime)*1000);if(!isNaN(date))el.textContent=date.toLocaleString('tr-TR',{timeZone:'Europe/Istanbul'})});
 })();

@@ -136,3 +136,35 @@ class SharedUIBrowserTests(unittest.TestCase):
                 menu=page.locator('.coffee-select-dialog');self.assertTrue(menu.evaluate("e=>!!e.closest('dialog[open]')"))
                 menu.locator('input').press('Escape');self.assertTrue(dialog.is_visible())
             self.assertFalse(errors,errors)
+
+    def test_note_info_keeps_icon_and_message_positions_when_opened(self):
+        from flask import render_template
+        with self.client.application.app_context():
+            html=render_template('_member_notes.html',item={'nearby_notes':[{'username':'member','time':'14.10.2026 18:31','text':'Ürün ile ilgili yorum yazın.'}]})
+        html='<html><head><link rel="stylesheet" href="/static/css/result.css"></head><body><main style="max-width:1000px;margin:auto">'+html+'</main></body></html>'
+        for width in (1440,390):
+            page,errors=self.page(width)
+            page.route('**/note-layout',lambda route:route.fulfill(body=html,content_type='text/html'))
+            page.goto('http://ui.test/note-layout',wait_until='domcontentloaded')
+            icon=page.locator('.member-note-info summary');text=page.locator('.member-nearby-note p')
+            before=icon.bounding_box();message=text.bounding_box();icon.click()
+            self.assertTrue(page.locator('.member-note-info').evaluate('e=>e.open'))
+            after=icon.bounding_box();self.assertAlmostEqual(before['x'],after['x'],delta=1);self.assertAlmostEqual(before['y'],after['y'],delta=1)
+            self.assertAlmostEqual(message['y'],text.bounding_box()['y'],delta=1)
+            self.assertTrue(page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
+            icon.click();self.assertFalse(errors,errors)
+
+    def test_matrix_missing_filter_loads_all_day_then_filters_locally(self):
+        result={'thread_id':'ui-group','selected_date':'2026-10-08','report_scope':{'date':'2026-10-08','daily_matrix':True},'group':['alice','bob'],'links':[{'post_link':'https://www.instagram.com/p/One/','commenters':['alice','bob'],'eksikler':[]},{'post_link':'https://www.instagram.com/p/Two/','commenters':['alice'],'eksikler':['bob']} ]}
+        identifier=jobs.enqueue('preset',{});jobs.claim_request(identifier,'day');jobs.complete(identifier,'day',result)
+        for width in (1440,390):
+            page,errors=self.page(width);requests=[]
+            page.route('**/api/reports/*/matrix/day',lambda route:(requests.append(route.request.method),route.fulfill(json={'success':True,'job_id':identifier}))[1])
+            page.route('**/api/task_status/'+identifier,lambda route:route.fulfill(json={'status':'completed'}))
+            page.goto('http://ui.test/reports/'+self.identifier+'/matrix',wait_until='domcontentloaded')
+            page.locator('[data-matrix-missing]').check()
+            page.wait_for_url('**/reports/'+identifier+'/matrix?missing=1')
+            self.assertEqual(page.locator('thead th').count(),3)
+            self.assertFalse(page.locator('[data-matrix-user=alice]').is_visible());self.assertTrue(page.locator('[data-matrix-user=bob]').is_visible())
+            page.locator('[data-matrix-missing]').uncheck();self.assertTrue(page.locator('[data-matrix-user=alice]').is_visible())
+            self.assertEqual(requests,['POST']);self.assertFalse(errors,errors)

@@ -176,7 +176,10 @@ def report_matrix(identifier):
     job=jobs.get_job(identifier)
     if not job or job['state']!='completed' or job['kind']=='member': abort(404)
     posts, rows=matrix(job['result'] or {})
-    return render_template('report_matrix.html', job=job, posts=posts, rows=rows)
+    data=job['result'] or {}
+    scope=data.get('report_scope') or {}
+    day=scope.get('date') or data.get('selected_date') or (job.get('payload') or {}).get('selected_date')
+    return render_template('report_matrix.html', job=job, posts=posts, rows=rows, daily_date=day, daily_ready=bool(scope.get('daily_matrix')), daily_available=bool(data.get('thread_id') and day))
 
 
 @history_bp.route('/api/reports/<identifier>/extend', methods=['POST'])
@@ -190,3 +193,22 @@ def extend_report(identifier):
     from app_core.preset_reports import enqueue_active
     job_id=enqueue_active(payload,identifier,'extend:'+identifier+':'+payload['date'])
     return jsonify(success=True,result_url='/result/'+job_id)
+
+
+@history_bp.post('/api/reports/<identifier>/matrix/day')
+def daily_matrix(identifier):
+    job=jobs.get_job(identifier)
+    if not job or job['state']!='completed' or job['kind'] not in ('manual','preset'): abort(404)
+    data=job['result'] or {};scope=data.get('report_scope') or {}
+    tid=data.get('thread_id')
+    day=scope.get('date') or data.get('selected_date') or (job.get('payload') or {}).get('selected_date')
+    if not tid or not day:
+        return jsonify(success=False,error='Günlük kontrol için raporda grup ve tarih seçilmiş olmalı.'),400
+    try:
+        day=datetime.strptime(day,'%Y-%m-%d').strftime('%Y-%m-%d')
+    except (ValueError,TypeError):
+        return jsonify(success=False,error='Raporun kontrol tarihi geçersiz.'),400
+    from app_core.preset_reports import enqueue_active
+    payload={**scope,'thread_id':tid,'date':day,'low_likes':False,'only_sharers':False,'_operation':'day','_source_id':identifier}
+    identifier=enqueue_active(payload,identifier,'matrix-day:'+identifier+':'+day)
+    return jsonify(success=True,job_id=identifier,matrix_url='/reports/'+identifier+'/matrix?missing=1')

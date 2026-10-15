@@ -95,4 +95,30 @@ class PresetReportTests(unittest.TestCase):
    r=self.client().post('/api/task_run/'+identifier)
   self.assertEqual(r.status_code,200);self.assertEqual(r.json['status'],'completed');self.assertTrue(jobs.get_job(identifier)['result']['dual_check'])
 
+
+ def test_daily_matrix_scans_existing_and_new_posts_in_both_modes(self):
+  source=self.source();before=copy.deepcopy(jobs.get_job(source)['result'])
+  with patch('app_core.token_service.fetch_group_members_with_failover',side_effect=AssertionError('Keep report members')),patch('app_core.token_service.fetch_group_media_with_failover',return_value={'ok':True,'posts':[{'url':URL,'username':'owner'},{'url':NEW,'username':'owner'}]}),patch('app_core.routes.main.run_manual_control',side_effect=self.mock_run) as run:
+   data=execute(dict(thread_id='g',date='2026-09-14',_operation='day',_source_id=source,low_likes=False),lambda *a:None)
+  self.assertEqual(run.call_count,2)
+  self.assertTrue(all(c.args[0].splitlines()==[URL,NEW] for c in run.call_args_list))
+  self.assertTrue(all(c.kwargs['low_likes'] is False for c in run.call_args_list))
+  self.assertTrue(data['report_scope']['daily_matrix']);self.assertEqual(data['selected_date'],'2026-09-14')
+  self.assertEqual(jobs.get_job(source)['result'],before)
+ def test_daily_matrix_endpoint_uses_source_group_and_date_and_deduplicates(self):
+  data=report();data['selected_date']='2026-09-14';source=self.source(data);client=self.client()
+  first=client.post('/api/reports/'+source+'/matrix/day').json
+  second=client.post('/api/reports/'+source+'/matrix/day').json
+  self.assertEqual(first['job_id'],second['job_id'])
+  payload=jobs.get_job(first['job_id'])['payload']
+  self.assertEqual((payload['thread_id'],payload['date'],payload['_operation']),('g','2026-09-14','day'))
+  self.assertFalse(payload['low_likes']);self.assertIn('?missing=1',first['matrix_url'])
+ def test_daily_matrix_requires_group_and_date(self):
+  data=report();data.pop('thread_id');source=self.source(data)
+  self.assertEqual(self.client().post('/api/reports/'+source+'/matrix/day').status_code,400)
+ def test_empty_daily_discovery_does_not_reuse_old_single_post(self):
+  source=self.source()
+  with patch('app_core.token_service.fetch_group_media_with_failover',return_value={'ok':True,'posts':[]}),self.assertRaises(ValueError):
+   execute(dict(thread_id='g',date='2026-09-14',_operation='day',_source_id=source),lambda *a:None)
+
 if __name__=='__main__':unittest.main()

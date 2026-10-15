@@ -69,17 +69,18 @@ def execute(payload, progress):
         if payload.get('low_likes'):
             posts = [p for p in posts if type(p.get('like_count')) in (int, float) and 0 <= p['like_count'] <= 90]
         if not source and payload.get('only_sharers'): users &= {p.get('username') for p in posts}
-        if source:
+        if source and operation == 'extend':
             known = {link_key(p['post_link']) for report in previous.values() for p in report.get('links', [])}
             posts = [p for p in posts if link_key(p['url']) not in known]
     if not users: raise ValueError('Kontrol edilecek üye bulunamadı.')
     if not posts:
-        if source:
+        if source and operation == 'extend':
             result = deepcopy(source['result']); result['added_posts'] = 0
             return result
         raise ValueError('Bu gün ve filtreler için paylaşım bulunamadı.')
     saved_dates = {**saved_dates, **{link_key(p['url']): p['shared_at'] for p in posts if p.get('shared_at')}}
     scope['shared_dates'] = saved_dates
+    if operation == 'day': scope['daily_matrix'] = True
     parts = {}
     for index, mode in enumerate(modes):
         checkpoint_key = 'preset-phase:' + str(payload.get('_job_id', '')) + ':' + mode
@@ -91,13 +92,14 @@ def execute(payload, progress):
             if payload.get('_job_id'): write(checkpoint_key, checkpoints)
         def mode_progress(current, total, message):
             progress(index * 100 + int(current / max(1, total) * 100), len(modes) * 100, ('Beğeni: ' if mode == 'likes' else 'Yorum: ') + message)
-        kwargs = dict(progress_callback=mode_progress, shared_dates=saved_dates or None)
+        kwargs = dict(progress_callback=mode_progress, shared_dates=saved_dates or None, low_likes=bool(payload.get('low_likes')))
         if payload.get('_job_id'): kwargs.update(checkpoints=checkpoints, save_checkpoint=save)
         if operation == 'refresh': kwargs.update(prev_result=previous[mode], only_missing=bool(payload.get('only_missing')), unknown_only=bool(payload.get('unknown_only')))
         fresh = run_manual_control('\n'.join(p['url'] for p in posts), ' '.join(sorted(users)), tid,
             [p['url'] + '|' + p['username'] for p in posts if p.get('username')], mode == 'likes', **kwargs)
         parts[mode] = merge_report(previous[mode], fresh) if operation == 'extend' else fresh
     result = combine(parts, scope)
+    if operation == 'day': result['selected_date'] = payload['date']
     if operation == 'extend': result['added_posts'] = len(posts)
     return result
 
