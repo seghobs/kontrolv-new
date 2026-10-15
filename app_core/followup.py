@@ -97,6 +97,7 @@ def apply_rules(result, thread, shared_dates=None):
     for post in result.get('links', []):
         reasons = {u: reason for u in group if (reason := eligibility(u, post['post_link'], post.get('sender'),
                    (shared_dates or {}).get(link_key(post['post_link'])) or post.get('shared_at'), rules))}
+        reasons.update(post.get('audit_exemptions') or {})
         post['excluded_members'] = reasons
         post['unknown_members'] = [u for u, reason in reasons.items() if reason.startswith('Tarih doğrulanamadı')]
         post['eksikler'] = [u for u in post.get('eksikler', []) if u not in reasons]

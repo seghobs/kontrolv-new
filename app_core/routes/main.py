@@ -469,6 +469,7 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
         link_single = res.get("post_link")
         link_results.append({
             "post_link": link_single,
+            "audit_exemptions": {u: ('Genel muafiyet' if u in global_exempted else 'Paylaşım muafiyeti') for u in (global_exempted | exemptions_by_link[link_single]) if u in grup_uye_kullanicilar},
             "checked_at": res.get('checked_at', __import__('time').time()),
             "source": res.get('source', 'live'),
             "skipped_reason": res.get('skipped_reason'),

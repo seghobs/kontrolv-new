@@ -78,3 +78,11 @@ class NullCommentTests(unittest.TestCase):
                 result=run(payload,lambda *args:None)
             self.assertEqual(result['rows'][0]['state'],state)
             self.assertEqual(result['counts']['missing'],0)
+
+    def test_global_exemption_is_preserved_in_matrix_snapshot(self):
+        from app_core.preset_reports import matrix
+        with patch.object(main,'get_working_active_token',return_value={'token':'test'}),patch.object(main,'get_global_exempted_users',return_value={'bob'}),patch.object(api,'get_post_details_async',new=AsyncMock(return_value={'comment_count':1,'comment_count_verified':True})),patch.object(main,'fetch_control_comments',new=AsyncMock(return_value={'ok':True,'comments':[('alice','hello')]})):
+            result=main.run_manual_control('https://www.instagram.com/p/ABC','alice bob charlie','',[],False)
+        _,rows=matrix(result);rows={r['username']:r for r in rows}
+        self.assertEqual(rows['bob']['cells'][0]['comments'],'excluded')
+        self.assertEqual(rows['charlie']['cells'][0]['comments'],'missing')
