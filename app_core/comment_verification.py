@@ -7,10 +7,11 @@ from app_core import instagram_api as api
 from app_core.validators import is_valid_username
 
 
-async def fetch_complete_comments(media_id, token_record, session):
+async def fetch_complete_comments(media_id, token_record, session, orders=('recent', 'popular')):
     records = {}
     parents = {}
     complete = True
+    failure_status = 200
     username = api._get_username(token_record)
     async def fetch(path, params):
         token = api.current_token(username, token_record.get('token', ''))
@@ -22,7 +23,9 @@ async def fetch_complete_comments(media_id, token_record, session):
             from app_core.session_state import update_session, response_cookies
             update_session(username, response.headers, expected_token=headers.get('authorization'), cookies=response_cookies(response), expected_revision=revision)
             if response.status != 200:
-                raise ValueError('Comment request failed: HTTP '+str(response.status))
+                error=ValueError('Comment request failed: HTTP '+str(response.status))
+                error.status=response.status
+                raise error
             data = json.loads(await response.text())
             if not isinstance(data, dict) or data.get('status') == 'fail':
                 raise ValueError('Invalid comment response')
@@ -49,25 +52,34 @@ async def fetch_complete_comments(media_id, token_record, session):
             children = add(item.get('preview_child_comments', []))
             expected = item.get('child_comment_count', 0)
             if type(expected) is int and expected > len(children):
-                parents[cid] = (expected, children)
+                previous_expected, previous_children = parents.get(cid, (0, set()))
+                parents[cid] = (max(expected, previous_expected), previous_children | children)
         return ids
 
+    for order in orders:
+        try:
+            params = {'can_support_threading': 'true', 'sort_order': order}
+            cursors = set()
+            for _ in range(api.MAX_COMMENT_PAGES):
+                data = await fetch('comments/', params)
+                add(data.get('comments'))
+                cursor = data.get('next_min_id') or data.get('next_max_id')
+                if not cursor:
+                    if data.get('has_more_comments') or data.get('has_more_headload_comments'): complete = False
+                    break
+                key = 'min_id' if data.get('next_min_id') else 'max_id'
+                if (key, str(cursor)) in cursors:
+                    complete = False;break
+                cursors.add((key, str(cursor)));params = {'can_support_threading':'true','sort_order':order,key:cursor}
+            else: complete = False
+        except Exception as error:
+            logger.warning('Comment sort %s failed: %s', order, type(error).__name__)
+            complete = False
+            failure_status = getattr(error, 'status', 502)
+            if failure_status in (401,403,429): break
     try:
-        params = {'can_support_threading': 'true', 'sort_order': 'recent'}
-        cursors = set()
-        for _ in range(api.MAX_COMMENT_PAGES):
-            data = await fetch('comments/', params)
-            add(data.get('comments'))
-            cursor = data.get('next_min_id') or data.get('next_max_id')
-            if not cursor:
-                if data.get('has_more_comments') or data.get('has_more_headload_comments'): complete = False
-                break
-            key = 'min_id' if data.get('next_min_id') else 'max_id'
-            if (key, str(cursor)) in cursors:
-                complete = False;break
-            cursors.add((key, str(cursor)));params = {'can_support_threading':'true','sort_order':'recent',key:cursor}
-        else: complete = False
-        for cid, (expected, children) in list(parents.items()):
+        for cid, (expected, children) in ([] if failure_status in (401,403,429) else list(parents.items())):
+            if len(children) >= expected: continue
             params = {};cursors = set()
             for _ in range(api.MAX_COMMENT_PAGES):
                 data = await fetch('comments/'+cid+'/inline_child_comments/', params)
@@ -81,7 +93,7 @@ async def fetch_complete_comments(media_id, token_record, session):
     except Exception as error:
         logger.warning('Full comment endpoint failed: %s', type(error).__name__)
         complete = False
-    return dict(ok=complete, incomplete=not complete, comments=list(records.values()), comment_ids=list(records))
+    return dict(ok=complete, status=200 if complete else failure_status, incomplete=not complete, comments=list(records.values()), comment_ids=list(records), scanned_orders=list(orders))
 
 
 async def recover_comment_list(media_id, token, session, details, response):
@@ -112,4 +124,12 @@ def recover_comment_list_sync(media_id, token, details, response):
     async def run():
         async with aiohttp.ClientSession() as session:
             return await recover_comment_list(media_id, token, session, details, response)
+    return asyncio.run(run())
+
+
+def fetch_complete_comments_sync(media_id, token):
+    import asyncio
+    async def run():
+        async with aiohttp.ClientSession() as session:
+            return await fetch_complete_comments(media_id, token, session)
     return asyncio.run(run())

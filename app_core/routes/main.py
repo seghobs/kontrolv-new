@@ -12,6 +12,7 @@ from log_in import giris_yap, LoginError
 from app_core.instagram_api import get_post_sender, get_media_taken_at, get_post_details, comments_cover_total
 from app_core.storage import load_exemptions, save_exemptions, load_global_exemptions, add_global_exemption, add_audit_log, _connect
 from app_core.validators import normalize_username
+from app_core.comment_verification import fetch_complete_comments as fetch_control_comments, fetch_complete_comments_sync
 from app_core.token_service import (
     fetch_comments_with_failover,
     fetch_likers_with_failover,
@@ -317,7 +318,7 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
                     all_result = await fetch_liker_usernames_async(media_id, working_token, session)
                     commenters_normalized = {normalize_username(u) for u in all_result.get("usernames", set())}
                 else:
-                    all_result = await fetch_comment_usernames_async(media_id, working_token, session)
+                    all_result = await fetch_control_comments(media_id, working_token, session)
                     comments_list = all_result.get("comments", [])
                     for uname, text in comments_list:
                         norm_uname = normalize_username(uname)
@@ -423,7 +424,7 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
                 commenters_normalized = {normalize_username(u) for u in (all_result if isinstance(all_result, set) else all_result.get("usernames", set()))}
                 comments_list = []
             else:
-                all_result = fetch_comments_with_failover(media_id, token_record=working_token)
+                all_result = fetch_complete_comments_sync(media_id, working_token)
                 comments_list = all_result if isinstance(all_result, list) else all_result.get("comments", [])
                 commenters_normalized = {normalize_username(uname) for uname, _ in comments_list}
             if not check_likes and ((isinstance(all_result, dict) and all_result.get('incomplete')) or ((grup_uye_kullanicilar - all_exempted_for_link - commenters_normalized) and not comments_cover_total(post_details, comments_list))):

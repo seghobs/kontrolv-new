@@ -44,7 +44,7 @@ class RequestPerformanceTests(unittest.TestCase):
              patch.object(main,'get_global_exempted_users',return_value=set()) as globals_, \
              patch.object(main,'add_audit_log'), \
              patch('app_core.instagram_api.get_post_details_async',new=AsyncMock(return_value={'comment_count':1,'comment_count_verified':True})), \
-             patch('app_core.instagram_api.fetch_comment_usernames_async',new=AsyncMock(return_value={'ok':True,'comments':[('alice','merhaba dünya')]})), \
+             patch('app_core.routes.main.fetch_control_comments',new=AsyncMock(return_value={'ok':True,'comments':[('alice','merhaba dünya')]})), \
              patch('asyncio.sleep',new=AsyncMock()):
             result=main.run_manual_control('https://www.instagram.com/p/ABC/\nhttps://www.instagram.com/p/DEF/','alice bob','',[],False)
         self.assertEqual(len(result['links']),2)

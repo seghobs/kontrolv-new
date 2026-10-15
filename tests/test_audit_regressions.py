@@ -29,7 +29,7 @@ class AuditRegressions(unittest.TestCase):
             stack.enter_context(patch('asyncio.sleep', new=AsyncMock()))
             stack.enter_context(patch.object(instagram, 'get_post_details_async', new=AsyncMock(
                 side_effect=RuntimeError('transport failure') if sync else None, return_value=details or {})))
-            comments=stack.enter_context(patch.object(instagram, 'fetch_comment_usernames_async',new=AsyncMock(return_value={'ok':True,'comments':[('alice','hello')]})))
+            comments=stack.enter_context(patch.object(main, 'fetch_control_comments',new=AsyncMock(return_value={'ok':True,'comments':[('alice','hello')]})))
             stack.enter_context(patch.object(instagram, 'fetch_liker_usernames_async',new=AsyncMock(return_value={'ok':True,'usernames':likers or set()})))
             stack.enter_context(patch.object(main, 'get_post_details',return_value=details or {}))
             fallback=stack.enter_context(patch.object(main,'fetch_likers_with_failover',return_value={'ok':True,'usernames':likers or set()}))

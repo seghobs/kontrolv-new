@@ -17,7 +17,7 @@ class CompleteCommentTests(unittest.TestCase):
  def fetch(self,pages):
   session=Session(pages)
   with patch('app_core.instagram_api.current_token',return_value='test'), patch('app_core.instagram_api.prepare_async_headers',side_effect=lambda u,url,h:(h,0)), patch('app_core.instagram_api.build_auth_headers',return_value={}), patch('app_core.session_state.update_session'), patch('app_core.instagram_api.get_outbound_proxy',return_value=None):
-   result=asyncio.run(fetch_complete_comments('1',{'username':'test'},session))
+   result=asyncio.run(fetch_complete_comments('1',{'username':'test'},session,orders=('recent',)))
   return result,session
  def test_distinct_ids_same_text_and_duplicate_page(self):
   r,_=self.fetch([{'comments':[comment('1'),comment('2')],'next_min_id':'a'},{'comments':[comment('2'),comment('3')]}])
@@ -37,3 +37,22 @@ class CompleteCommentTests(unittest.TestCase):
  def test_recent_order_is_preserved_during_pagination(self):
   r,s=self.fetch([{'comments':[comment('1')],'next_min_id':'a'},{'comments':[comment('2')]}])
   self.assertTrue(r['ok']);self.assertEqual([p['sort_order'] for p in s.params],['recent','recent'])
+
+ def test_all_supported_orders_merge_ids_without_double_counting(self):
+  session=Session([{'comments':[comment('1'),comment('2')],'next_min_id':'a'}, {'comments':[comment('3')]}, {'comments':[comment('2'),comment('4')]}])
+  with patch('app_core.instagram_api.current_token',return_value='test'),patch('app_core.instagram_api.prepare_async_headers',side_effect=lambda u,url,h:(h,0)),patch('app_core.instagram_api.build_auth_headers',return_value={}),patch('app_core.session_state.update_session'),patch('app_core.instagram_api.get_outbound_proxy',return_value=None):
+   result=asyncio.run(fetch_complete_comments('1',{'username':'test'},session))
+  self.assertTrue(result['ok']);self.assertEqual(set(result['comment_ids']),{'1','2','3','4'})
+  self.assertEqual([p['sort_order'] for p in session.params],['recent','recent','popular'])
+
+ def test_failed_order_preserves_authors_from_other_order(self):
+  session=Session([{'status':'fail'},{'comments':[comment('1')]}])
+  with patch('app_core.instagram_api.current_token',return_value='test'),patch('app_core.instagram_api.prepare_async_headers',side_effect=lambda u,url,h:(h,0)),patch('app_core.instagram_api.build_auth_headers',return_value={}),patch('app_core.session_state.update_session'),patch('app_core.instagram_api.get_outbound_proxy',return_value=None):
+   result=asyncio.run(fetch_complete_comments('1',{'username':'test'},session))
+  self.assertFalse(result['ok']);self.assertEqual(result['comment_ids'],['1'])
+  self.assertEqual([p['sort_order'] for p in session.params],['recent','popular'])
+ def test_children_seen_in_different_orders_are_not_requested_again(self):
+  session=Session([{'comments':[comment('1',child_comment_count=2,preview_child_comments=[comment('2')])]}, {'comments':[comment('1',child_comment_count=2,preview_child_comments=[comment('3')])]}])
+  with patch('app_core.instagram_api.current_token',return_value='test'),patch('app_core.instagram_api.prepare_async_headers',side_effect=lambda u,url,h:(h,0)),patch('app_core.instagram_api.build_auth_headers',return_value={}),patch('app_core.session_state.update_session'),patch('app_core.instagram_api.get_outbound_proxy',return_value=None):
+   result=asyncio.run(fetch_complete_comments('1',{'username':'test'},session))
+  self.assertTrue(result['ok']);self.assertEqual(len(result['comment_ids']),3);self.assertEqual(len(session.urls),2)
