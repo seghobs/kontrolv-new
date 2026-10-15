@@ -97,7 +97,8 @@ async def recover_comment_list(media_id, token, session, details, response):
         refreshed = await api.get_post_details_async(media_id, token, session)
         if refreshed and refreshed.get('comment_count_verified'):
             details = refreshed
-        response = verified
+        if len(verified.get('comments',[])) >= len(comments):
+            response = verified
         if not api.comments_cover_total(details, response.get('comments', [])):
             retry = await api.fetch_comment_usernames_async(media_id, token, session)
             if retry.get('ok') and not retry.get('incomplete') and api.comments_cover_total(details, retry.get('comments', [])):

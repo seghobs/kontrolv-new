@@ -43,9 +43,10 @@ def require_complete_likers(details, usernames, missing):
         raise ControlUnavailable("Beğeni listesi eksik alındı; üyeler eksik olarak işaretlenmedi. Lütfen tekrar deneyin.")
 
 
-def incomplete_comment_post(link, details, sender, comments):
-    return dict(details, post_link=link, sender=sender, eksikler=[], commenters=[],
-                comments_list=comments,
+def incomplete_comment_post(link, details, sender, comments, members=None):
+    return dict(details, post_link=link, sender=sender, eksikler=[],
+                commenters=sorted({normalize_username(u) for u, _ in comments} & set(members or [])),
+                verification_pending=True, obtained_comment_count=len(comments), comments_list=comments,
                 commenters_normalized={normalize_username(u) for u, _ in comments},
                 error='Doğrulanamadı: Bazı yorumların kullanıcı bilgisi veya yorum listesi alınamadı. Bu paylaşım için kesin eksik listesi oluşturulmadı.')
 
@@ -331,7 +332,7 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
                         tracker['done'] += 1
                         if progress_callback:
                             progress_callback(tracker['done'], tracker['total'], 'Yorum verisi tamamlanamadı; diğer kontroller sürüyor.')
-                        return incomplete_comment_post(link_single, post_details, post_sender, comments_list)
+                        return incomplete_comment_post(link_single, post_details, post_sender, comments_list, grup_uye_kullanicilar)
                 require_complete_result(all_result)
                 eksikler = grup_uye_kullanicilar - all_exempted_for_link - commenters_normalized
                 if check_likes:
@@ -431,7 +432,7 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
                 comments_list = all_result.get('comments', []) if isinstance(all_result, dict) else all_result
                 commenters_normalized = {normalize_username(u) for u, _ in comments_list}
                 if (isinstance(all_result, dict) and all_result.get('incomplete')) or not comments_cover_total(post_details, comments_list):
-                    fetched_results.append(incomplete_comment_post(link_single, post_details, post_sender, comments_list))
+                    fetched_results.append(incomplete_comment_post(link_single, post_details, post_sender, comments_list, grup_uye_kullanicilar))
                     continue
             try:
                 require_complete_result(all_result)
@@ -483,6 +484,8 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
             "video_url": res.get("video_url", ""),
             "comments_list": [{"username": u, "text": t} for u, t in res.get("comments_list", [])],
             "likers_list": list(res.get("commenters_normalized", set())) if check_likes else [],
+            "verification_pending": res.get("verification_pending", False),
+            "obtained_comment_count": res.get("obtained_comment_count"),
             "error": res.get("error")
         })
         
@@ -553,7 +556,7 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
     tamamlayanlar_genel = completed_any - all_exempted - eksikler_all - responsibility_unknown
     if any(lr.get('error') for lr in link_results):
         # Skipped/unverified posts cannot establish completion of the whole run.
-        tamamlayanlar_genel = set()
+        tamamlayanlar_genel = {u for u in tamamlayanlar_genel if all(u in lr.get('commenters', []) or u in lr.get('excluded_members', {}) or lr.get('skipped_reason') for lr in link_results)}
     
     user_missing_formatted = {user: posts for user, posts in user_missing_posts.items()}
     

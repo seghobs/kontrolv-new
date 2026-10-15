@@ -203,6 +203,13 @@
                         </div>
 
                         <div class="member-note-slot">{% include '_member_notes.html' %}</div>
+                        {% if item.error %}
+                        <div class="alert alert-warning mx-3 mt-3" role="status" style="background:#c4956a15;border:1px solid #c4956a55;color:#eadbcb;border-radius:10px;">
+                            {% if item.verification_pending %}
+                            Instagram {{ item.comment_count }} yorum bildiriyor; {{ item.obtained_comment_count }} yorum alınabildi. Yorum yaptığı görülen üyeler aşağıda listeleniyor. Kalan yorumlar alınamadığı için kesin eksik listesi oluşturulmadı.
+                            {% else %}{{ item.error }}{% endif %}
+                        </div>
+                        {% endif %}
 
                         <div id="eksiklerSection-{{ loop.index }}" class="result-section-content collapsed">
                             {% if item.skipped_reason %}

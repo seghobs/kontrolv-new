@@ -27,3 +27,14 @@ class CommentRecoveryTests(unittest.IsolatedAsyncioTestCase):
   with patch('app_core.comment_verification.fetch_complete_comments',AsyncMock(return_value=full)),patch('app_core.instagram_api.get_post_details_async',AsyncMock(return_value=details)),patch('app_core.instagram_api.fetch_comment_usernames_async',AsyncMock(return_value=retry)):
    _,response=await recover_comment_list('id',{},None,details,partial)
   self.assertEqual(len(response['comments']),3)
+
+ async def test_recovery_does_not_replace_larger_partial_list(self):
+  details={'comment_count':3,'comment_count_verified':True};original={'ok':True,'comments':[('alice','one'),('bob','two')]};shorter={'ok':True,'comments':[('alice','one')]}
+  with patch('app_core.comment_verification.fetch_complete_comments',AsyncMock(return_value=shorter)),patch('app_core.instagram_api.get_post_details_async',AsyncMock(return_value=details)),patch('app_core.instagram_api.fetch_comment_usernames_async',AsyncMock(return_value=original)):
+   _,response=await recover_comment_list('id',{},None,details,original)
+  self.assertEqual(response['comments'],original['comments'])
+ async def test_known_authors_survive_incomplete_list_without_false_missing(self):
+  from app_core.routes.main import incomplete_comment_post
+  row=incomplete_comment_post('url',{'comment_count':3},'owner',[('alice','text'),('outsider','text')],{'alice','bob'})
+  self.assertEqual(row['commenters'],['alice']);self.assertEqual(row['eksikler'],[])
+  self.assertTrue(row['verification_pending']);self.assertEqual(row['obtained_comment_count'],2)
