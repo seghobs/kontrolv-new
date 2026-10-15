@@ -19,6 +19,18 @@ def comment_availability(media):
             for key in ('comments_disabled', 'commenting_disabled_for_viewer')}
 
 
+def comment_totals(media):
+    """Instagram's cross-post total also includes explicitly reported FB comments."""
+    total = media.get('comment_count')
+    facebook = media.get('fb_comment_count', 0)
+    valid = type(total) is int and total >= 0
+    valid_facebook = valid and type(facebook) is int and 0 <= facebook <= total
+    return {'comment_count': total - facebook if valid_facebook else (total if valid else 0),
+            'comment_count_verified': valid,
+            'reported_comment_count': total if valid else None,
+            'facebook_comment_count': facebook if valid_facebook else 0}
+
+
 def comments_cover_total(details, comments):
     count = (details or {}).get('comment_count')
     return bool((details or {}).get('comment_count_verified') and type(count) is int and count >= 0 and len(comments) >= count)
@@ -294,8 +306,7 @@ def get_post_details(media_id, token_record):
                 res["profile_pic_url"] = user.get("profile_pic_url", "")
                 res["like_count"] = item.get("like_count", 0)
                 res["like_count_verified"] = isinstance(item.get("like_count"), int)
-                res["comment_count"] = item.get("comment_count", 0)
-                res["comment_count_verified"] = type(item.get("comment_count")) is int
+                res.update(comment_totals(item))
                 res.update(comment_availability(item))
                 caption = item.get("caption") or {}
                 res["caption"] = caption.get("text", "")
@@ -1419,8 +1430,7 @@ async def get_post_details_async(media_id, token_record, session: aiohttp.Client
                     res["profile_pic_url"] = user.get("profile_pic_url", "")
                     res["like_count"] = item.get("like_count", 0)
                     res["like_count_verified"] = isinstance(item.get("like_count"), int)
-                    res["comment_count"] = item.get("comment_count", 0)
-                    res["comment_count_verified"] = type(item.get("comment_count")) is int
+                    res.update(comment_totals(item))
                     res["taken_at"] = item.get("taken_at", 0)
                     caption = item.get("caption") or {}
                     res["caption"] = caption.get("text", "")
