@@ -189,6 +189,8 @@ def run(payload, progress):
                             from app_core.comment_verification import fetch_complete_comments
                             verified = await fetch_complete_comments(mid, token, session)
                             if verified.get('ok'):
+                                from app_core.instagram_api import reconcile_comment_total
+                                details = reconcile_comment_total(details, verified)
                                 response = verified
                                 row['comments'], obtained_count, complete = member_comments(response, username)
                             else:

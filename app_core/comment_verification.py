@@ -12,6 +12,10 @@ async def fetch_complete_comments(media_id, token_record, session, orders=('rece
     parents = {}
     complete = True
     failure_status = 200
+    order_ids = {}
+    reported_totals = set()
+    totals_valid = True
+    active_ids = None
     username = api._get_username(token_record)
     async def fetch(path, params):
         token = api.current_token(username, token_record.get('token', ''))
@@ -48,6 +52,7 @@ async def fetch_complete_comments(media_id, token_record, session, orders=('rece
                 complete = False
                 continue
             cid = str(cid);ids.add(cid)
+            if active_ids is not None: active_ids.add(cid)
             records[cid] = (name, item.get('text') if isinstance(item.get('text'), str) else '')
             children = add(item.get('preview_child_comments', []))
             expected = item.get('child_comment_count', 0)
@@ -57,11 +62,19 @@ async def fetch_complete_comments(media_id, token_record, session, orders=('rece
         return ids
 
     for order in orders:
+        active_ids = set()
+        order_ids[order] = active_ids
         try:
             params = {'can_support_threading': 'true', 'sort_order': order}
             cursors = set()
             for _ in range(api.MAX_COMMENT_PAGES):
                 data = await fetch('comments/', params)
+                if (data.get('sort_order') != order or data.get('geoblocked_comment_notices')
+                        or data.get('comment_filter_param') not in (None, '', 'no_filter')):
+                    totals_valid = False
+                total = data.get('comment_count')
+                if type(total) is int and total >= 0: reported_totals.add(total)
+                else: totals_valid = False
                 add(data.get('comments'))
                 cursor = data.get('next_min_id') or data.get('next_max_id')
                 if not cursor:
@@ -77,6 +90,7 @@ async def fetch_complete_comments(media_id, token_record, session, orders=('rece
             complete = False
             failure_status = getattr(error, 'status', 502)
             if failure_status in (401,403,429): break
+    active_ids = None
     try:
         for cid, (expected, children) in ([] if failure_status in (401,403,429) else list(parents.items())):
             if len(children) >= expected: continue
@@ -93,11 +107,18 @@ async def fetch_complete_comments(media_id, token_record, session, orders=('rece
     except Exception as error:
         logger.warning('Full comment endpoint failed: %s', type(error).__name__)
         complete = False
-    return dict(ok=complete, status=200 if complete else failure_status, incomplete=not complete, comments=list(records.values()), comment_ids=list(records), scanned_orders=list(orders))
+    list_count = next(iter(reported_totals)) if len(reported_totals) == 1 else None
+    list_verified = bool(complete and totals_valid and {'recent','popular'} <= set(order_ids)
+                         and type(list_count) is int and len(records) == list_count
+                         and all(ids == set(records) for ids in order_ids.values()))
+    return dict(ok=complete, status=200 if complete else failure_status, incomplete=not complete,
+                comments=list(records.values()), comment_ids=list(records), scanned_orders=list(orders),
+                list_count_verified=list_verified, list_comment_count=list_count if list_verified else None)
 
 
 async def recover_comment_list(media_id, token, session, details, response):
     """Recover a partial stream through the full comment and reply endpoint."""
+    details = api.reconcile_comment_total(details, response)
     comments = response.get('comments', []) if isinstance(response, dict) else response
     if isinstance(response, dict) and response.get('status') not in (None, 200):
         return details, response
@@ -109,6 +130,7 @@ async def recover_comment_list(media_id, token, session, details, response):
         refreshed = await api.get_post_details_async(media_id, token, session)
         if refreshed and refreshed.get('comment_count_verified'):
             details = refreshed
+        details = api.reconcile_comment_total(details, verified)
         if len(verified.get('comments',[])) >= len(comments):
             response = verified
         if not api.comments_cover_total(details, response.get('comments', [])):

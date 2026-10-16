@@ -56,3 +56,22 @@ class CompleteCommentTests(unittest.TestCase):
   with patch('app_core.instagram_api.current_token',return_value='test'),patch('app_core.instagram_api.prepare_async_headers',side_effect=lambda u,url,h:(h,0)),patch('app_core.instagram_api.build_auth_headers',return_value={}),patch('app_core.session_state.update_session'),patch('app_core.instagram_api.get_outbound_proxy',return_value=None):
    result=asyncio.run(fetch_complete_comments('1',{'username':'test'},session))
   self.assertTrue(result['ok']);self.assertEqual(len(result['comment_ids']),3);self.assertEqual(len(session.urls),2)
+
+ def test_matching_exhausted_order_counts_are_explicitly_verified(self):
+  session=Session([{'sort_order':'recent','comment_count':1,'comments':[comment('1')]},{'sort_order':'popular','comment_count':1,'comments':[comment('1')]}])
+  with patch('app_core.instagram_api.current_token',return_value='test'),patch('app_core.instagram_api.prepare_async_headers',side_effect=lambda u,url,h:(h,0)),patch('app_core.instagram_api.build_auth_headers',return_value={}),patch('app_core.session_state.update_session'),patch('app_core.instagram_api.get_outbound_proxy',return_value=None):
+   result=asyncio.run(fetch_complete_comments('1',{'username':'test'},session))
+  self.assertTrue(result['list_count_verified']);self.assertEqual(result['list_comment_count'],1)
+ def test_disagreeing_order_totals_do_not_verify_listing_count(self):
+  session=Session([{'sort_order':'recent','comment_count':2,'comments':[comment('1')]},{'sort_order':'popular','comment_count':1,'comments':[comment('1')]}])
+  with patch('app_core.instagram_api.current_token',return_value='test'),patch('app_core.instagram_api.prepare_async_headers',side_effect=lambda u,url,h:(h,0)),patch('app_core.instagram_api.build_auth_headers',return_value={}),patch('app_core.session_state.update_session'),patch('app_core.instagram_api.get_outbound_proxy',return_value=None):
+   result=asyncio.run(fetch_complete_comments('1',{'username':'test'},session))
+  self.assertFalse(result['list_count_verified'])
+
+ def test_hidden_or_filtered_list_does_not_override_media_count(self):
+  for flags in ({'geoblocked_comment_notices':['restricted']},{'comment_filter_param':'filtered'}):
+   pages=[{'sort_order':order,'comment_count':1,'comments':[comment('1')],**flags} for order in ('recent','popular')]
+   session=Session(pages)
+   with patch('app_core.instagram_api.current_token',return_value='test'),patch('app_core.instagram_api.prepare_async_headers',side_effect=lambda u,url,h:(h,0)),patch('app_core.instagram_api.build_auth_headers',return_value={}),patch('app_core.session_state.update_session'),patch('app_core.instagram_api.get_outbound_proxy',return_value=None):
+    result=asyncio.run(fetch_complete_comments('1',{'username':'test'},session))
+   self.assertFalse(result['list_count_verified'])

@@ -19,3 +19,21 @@ class CrossPlatformCommentTests(unittest.TestCase):
    self.assertFalse(comments_cover_total(comment_totals({'comment_count':value,'fb_comment_count':1}),[]))
  def test_zero_total_and_facebook_count_are_valid(self):
   self.assertTrue(comments_cover_total(comment_totals({'comment_count':0,'fb_comment_count':0}),[]))
+
+ def confirmed_listing(self):
+  return {'ok':True,'status':200,'incomplete':False,'scanned_orders':['recent','popular'],'list_count_verified':True,'list_comment_count':1,'comment_ids':['comment1'],'comments':[('alice','hello')]}
+ def test_listing_count_can_resolve_stale_media_aggregate(self):
+  from app_core.instagram_api import reconcile_comment_total
+  details=reconcile_comment_total({'comment_count':2,'comment_count_verified':True},self.confirmed_listing())
+  self.assertEqual(details['comment_count'],1);self.assertEqual(details['media_comment_count'],2)
+  self.assertTrue(comments_cover_total(details,[('alice','hello')]))
+ def test_incomplete_unconfirmed_or_single_order_cannot_lower_total(self):
+  from app_core.instagram_api import reconcile_comment_total
+  original={'comment_count':2,'comment_count_verified':True}
+  for override in ({'ok':False},{'incomplete':True},{'list_count_verified':False},{'scanned_orders':['recent']},{'list_comment_count':2},{'comment_ids':['comment1','comment1']}):
+   response={**self.confirmed_listing(),**override}
+   self.assertEqual(reconcile_comment_total(original,response),original)
+ def test_facebook_count_is_not_subtracted_again_from_listing(self):
+  from app_core.instagram_api import reconcile_comment_total
+  original={'comment_count':2,'comment_count_verified':True,'facebook_comment_count':1}
+  self.assertEqual(reconcile_comment_total(original,self.confirmed_listing()),original)

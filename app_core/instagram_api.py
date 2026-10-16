@@ -31,6 +31,25 @@ def comment_totals(media):
             'facebook_comment_count': facebook if valid_facebook else 0}
 
 
+def reconcile_comment_total(details, response):
+    """Use the current listing count only when both complete orders corroborate it."""
+    if not isinstance(response, dict) or not response.get('ok') or response.get('incomplete'):
+        return details
+    count = response.get('list_comment_count')
+    ids = response.get('comment_ids') or []
+    if (not response.get('list_count_verified') or type(count) is not int or count < 0
+            or set(response.get('scanned_orders') or []) != {'recent','popular'}
+            or len(ids) != len(set(ids)) or len(ids) != count
+            or len(response.get('comments') or []) != count
+            or (details or {}).get('facebook_comment_count', 0) != 0):
+        return details
+    if (details or {}).get('comment_count') == count and (details or {}).get('comment_count_verified'):
+        return details
+    logger.info('COMMENT_COUNT_RECONCILED media=%s listing=%s', (details or {}).get('comment_count'), count)
+    return dict(details or {}, media_comment_count=(details or {}).get('comment_count'),
+                comment_count=count, comment_count_verified=True, comment_count_source='two_complete_orders')
+
+
 def comments_cover_total(details, comments):
     count = (details or {}).get('comment_count')
     return bool((details or {}).get('comment_count_verified') and type(count) is int and count >= 0 and len(comments) >= count)
