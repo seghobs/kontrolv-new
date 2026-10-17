@@ -1,0 +1,76 @@
+{
+  "post_code": "DekE1Imo4To",
+  "native_unique_comments": 24,
+  "application_unique_comments": 24,
+  "identical_ids": true,
+  "comment_identity_fingerprint": "204c95a13e3094d8d7b02f924df638501625c5bc70ce862a939cdf074fea1e09",
+  "requests": [
+    {
+      "path": "/api/v1/media/4009350811823080680_1025796226/stream_comments/",
+      "parameter_names": [
+        "can_support_threading",
+        "feed_position",
+        "is_carousel_bumped_post",
+        "page_type",
+        "should_fetch_creator_comment_nudge"
+      ],
+      "http_status": 200,
+      "stream_chunks": [
+        5,
+        5,
+        4
+      ],
+      "reported_count": 25,
+      "has_more_comments": false,
+      "has_more_headload_comments": true,
+      "sort_order": "popular",
+      "filter": "no_filter",
+      "user_agent": "Instagram 449.0.0.52.84 Android (28/9; 360dpi; 1080x1920; samsung; SM-S938B; e3q; qcom; tr_TR; 1079242193)"
+    },
+    {
+      "path": "/api/v1/media/4009350811823080680_1025796226/stream_comments/",
+      "parameter_names": [
+        "can_support_threading",
+        "feed_position",
+        "is_carousel_bumped_post",
+        "min_id",
+        "page_type",
+        "should_fetch_creator_comment_nudge",
+        "sort_order"
+      ],
+      "http_status": 200,
+      "stream_chunks": [
+        5,
+        5
+      ],
+      "reported_count": 25,
+      "has_more_comments": false,
+      "has_more_headload_comments": true,
+      "sort_order": "popular",
+      "filter": "no_filter",
+      "user_agent": "Instagram 449.0.0.52.84 Android (28/9; 360dpi; 1080x1920; samsung; SM-S938B; e3q; qcom; tr_TR; 1079242193)"
+    },
+    {
+      "path": "/api/v1/media/4009350811823080680_1025796226/stream_comments/",
+      "parameter_names": [
+        "can_support_threading",
+        "feed_position",
+        "is_carousel_bumped_post",
+        "min_id",
+        "page_type",
+        "should_fetch_creator_comment_nudge",
+        "sort_order"
+      ],
+      "http_status": 200,
+      "stream_chunks": [
+        0
+      ],
+      "reported_count": 25,
+      "has_more_comments": false,
+      "has_more_headload_comments": false,
+      "sort_order": "popular",
+      "filter": "no_filter",
+      "user_agent": "Instagram 449.0.0.52.84 Android (28/9; 360dpi; 1080x1920; samsung; SM-S938B; e3q; qcom; tr_TR; 1079242193)"
+    }
+  ]
+}

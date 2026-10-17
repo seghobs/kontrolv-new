@@ -49,3 +49,17 @@ class CrossPlatformCommentTests(unittest.TestCase):
   response={**self.confirmed_listing(),'list_count_verified':False,'list_comment_count':None,'visible_count_verified':False,'visible_comment_count':1}
   original={'comment_count':2,'comment_count_verified':True}
   self.assertEqual(reconcile_comment_total(original,response),original)
+
+ def test_counter_increase_during_scan_does_not_use_stale_lower_info_total(self):
+  from app_core.instagram_api import reconcile_comment_total
+  response={**self.confirmed_listing(),'list_count_verified':False,'reported_max_comment_count':2,'reported_list_comment_count':None}
+  details=reconcile_comment_total({'comment_count':1,'comment_count_verified':True},response)
+  self.assertEqual(details['comment_count'],2)
+  self.assertFalse(comments_cover_total(details,response['comments']))
+
+ def test_untrusted_counter_increase_cannot_replace_media_total(self):
+  from app_core.instagram_api import reconcile_comment_total
+  original={'comment_count':1,'comment_count_verified':True}
+  for override in ({'reported_max_comment_count':'2'},{'reported_max_comment_count':True},{'ok':False},{'incomplete':True},{'scanned_orders':['popular']}):
+   response={**self.confirmed_listing(),'list_count_verified':False,'reported_max_comment_count':2,**override}
+   self.assertEqual(reconcile_comment_total(original,response),original)

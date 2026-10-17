@@ -1,0 +1,339 @@
+{
+  "description": "Anonymized structure of Instagram Android 449 native responses; 25 aggregate, 24 returned identities, three HTTP requests.",
+  "requests": [
+    [
+      {
+        "comment_count": 25,
+        "has_more_comments": false,
+        "has_more_headload_comments": true,
+        "sort_order": "popular",
+        "comment_filter_param": "no_filter",
+        "status": "ok",
+        "comments": [
+          {
+            "pk": "1",
+            "user": {
+              "username": "member_1"
+            },
+            "text": "anonymized_1",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "2",
+            "user": {
+              "username": "member_2"
+            },
+            "text": "anonymized_2",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "3",
+            "user": {
+              "username": "member_3"
+            },
+            "text": "anonymized_3",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "4",
+            "user": {
+              "username": "member_4"
+            },
+            "text": "anonymized_4",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "5",
+            "user": {
+              "username": "member_5"
+            },
+            "text": "anonymized_5",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          }
+        ],
+        "caption": {
+          "pk": "caption",
+          "type": 1,
+          "user": {
+            "username": "owner"
+          },
+          "text": "Post caption, not a comment"
+        },
+        "next_min_id": "opaque_cursor_0"
+      },
+      {
+        "comment_count": 25,
+        "has_more_comments": false,
+        "has_more_headload_comments": true,
+        "sort_order": "popular",
+        "comment_filter_param": "no_filter",
+        "status": "ok",
+        "comments": [
+          {
+            "pk": "6",
+            "user": {
+              "username": "member_6"
+            },
+            "text": "anonymized_6",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "7",
+            "user": {
+              "username": "member_7"
+            },
+            "text": "anonymized_7",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "8",
+            "user": {
+              "username": "member_8"
+            },
+            "text": "anonymized_8",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "9",
+            "user": {
+              "username": "member_9"
+            },
+            "text": "anonymized_9",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "10",
+            "user": {
+              "username": "member_10"
+            },
+            "text": "anonymized_10",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          }
+        ],
+        "caption": {
+          "pk": "caption",
+          "type": 1,
+          "user": {
+            "username": "owner"
+          },
+          "text": "Post caption, not a comment"
+        },
+        "next_min_id": "opaque_cursor_0"
+      },
+      {
+        "comment_count": 25,
+        "has_more_comments": false,
+        "has_more_headload_comments": true,
+        "sort_order": "popular",
+        "comment_filter_param": "no_filter",
+        "status": "ok",
+        "comments": [
+          {
+            "pk": "11",
+            "user": {
+              "username": "member_11"
+            },
+            "text": "anonymized_11",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "12",
+            "user": {
+              "username": "member_12"
+            },
+            "text": "anonymized_12",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "13",
+            "user": {
+              "username": "member_13"
+            },
+            "text": "anonymized_13",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "14",
+            "user": {
+              "username": "member_14"
+            },
+            "text": "anonymized_14",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          }
+        ],
+        "caption": {
+          "pk": "caption",
+          "type": 1,
+          "user": {
+            "username": "owner"
+          },
+          "text": "Post caption, not a comment"
+        },
+        "next_min_id": "opaque_cursor_0"
+      }
+    ],
+    [
+      {
+        "comment_count": 25,
+        "has_more_comments": false,
+        "has_more_headload_comments": true,
+        "sort_order": "popular",
+        "comment_filter_param": "no_filter",
+        "status": "ok",
+        "comments": [
+          {
+            "pk": "15",
+            "user": {
+              "username": "member_15"
+            },
+            "text": "anonymized_15",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "16",
+            "user": {
+              "username": "member_16"
+            },
+            "text": "anonymized_16",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "17",
+            "user": {
+              "username": "member_17"
+            },
+            "text": "anonymized_17",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "18",
+            "user": {
+              "username": "member_18"
+            },
+            "text": "anonymized_18",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "19",
+            "user": {
+              "username": "member_19"
+            },
+            "text": "anonymized_19",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          }
+        ],
+        "caption": {
+          "pk": "caption",
+          "type": 1,
+          "user": {
+            "username": "owner"
+          },
+          "text": "Post caption, not a comment"
+        },
+        "next_min_id": "opaque_cursor_1"
+      },
+      {
+        "comment_count": 25,
+        "has_more_comments": false,
+        "has_more_headload_comments": true,
+        "sort_order": "popular",
+        "comment_filter_param": "no_filter",
+        "status": "ok",
+        "comments": [
+          {
+            "pk": "20",
+            "user": {
+              "username": "member_20"
+            },
+            "text": "anonymized_20",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "21",
+            "user": {
+              "username": "member_21"
+            },
+            "text": "anonymized_21",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "22",
+            "user": {
+              "username": "member_22"
+            },
+            "text": "anonymized_22",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "23",
+            "user": {
+              "username": "member_23"
+            },
+            "text": "anonymized_23",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          },
+          {
+            "pk": "24",
+            "user": {
+              "username": "member_24"
+            },
+            "text": "anonymized_24",
+            "child_comment_count": 0,
+            "preview_child_comments": []
+          }
+        ],
+        "caption": {
+          "pk": "caption",
+          "type": 1,
+          "user": {
+            "username": "owner"
+          },
+          "text": "Post caption, not a comment"
+        },
+        "next_min_id": "opaque_cursor_1"
+      }
+    ],
+    [
+      {
+        "comment_count": 25,
+        "has_more_comments": false,
+        "has_more_headload_comments": false,
+        "sort_order": "popular",
+        "comment_filter_param": "no_filter",
+        "status": "ok",
+        "comments": [],
+        "caption": {
+          "pk": "caption",
+          "type": 1,
+          "user": {
+            "username": "owner"
+          },
+          "text": "Post caption, not a comment"
+        }
+      }
+    ]
+  ]
+}

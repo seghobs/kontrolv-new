@@ -115,6 +115,7 @@ async def fetch_complete_comments(media_id, token_record, session, orders=('rece
     # the mobile listing. Use it only on a discrepancy, with bounded pagination.
     web_ids = set()
     web_complete = False
+    supplemental_orders = []
     if complete and type(list_count) is int and len(records) < list_count and {'recent', 'popular'} <= exhausted_orders:
         try:
             cursor = None
@@ -148,6 +149,14 @@ async def fetch_complete_comments(media_id, token_record, session, orders=('rece
                 cursors.add(str(cursor))
         except Exception as error:
             logger.info('Independent comment connection unavailable: %s', type(error).__name__)
+    # These additional sort values were verified in the Android APK and live
+    # traffic tests. They are recovery views, never substitutes for unfiltered
+    # recent/popular scans (notably, Meta Verified-only is a restrictive filter).
+    if complete and type(list_count) is int and len(records) < list_count and {'recent', 'popular'} <= exhausted_orders:
+        supplemental_orders = ['meta_verified', 'following', 'questions', 'follower_count']
+        extra = await fetch_complete_comments(media_id, token_record, session, orders=tuple(supplemental_orders))
+        for cid, record in zip(extra.get('comment_ids', []), extra.get('comments', [])):
+            records[cid] = record
     list_verified = bool(complete and totals_valid and {'recent','popular'} <= set(order_ids)
                          and type(list_count) is int and len(records) == list_count
                          and (all(ids == set(records) for ids in order_ids.values())
@@ -161,7 +170,9 @@ async def fetch_complete_comments(media_id, token_record, session, orders=('rece
                 list_count_verified=list_verified, list_comment_count=list_count if list_verified else None,
                 visible_count_verified=visible_verified, visible_comment_count=len(records) if visible_verified else None,
                 reported_list_comment_count=list_count,
-                web_listing_complete=web_complete, web_comment_count=len(web_ids) if web_complete else None)
+                reported_max_comment_count=max(reported_totals) if reported_totals else None,
+                web_listing_complete=web_complete, web_comment_count=len(web_ids) if web_complete else None,
+                supplemental_orders=supplemental_orders)
 
 
 def api_code(media_id):

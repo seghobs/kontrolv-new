@@ -121,3 +121,14 @@ class CompleteCommentTests(unittest.TestCase):
   web={'data':{'shortcode_media':{'edge_media_to_parent_comment':{'count':3,'edges':[{'node':{'id':'2','owner':{'username':'bob'},'text':'hello'}}],'page_info':{'has_next_page':True,'end_cursor':'loop'}}}}}
   result=self.exhaustive(mobile+[web,web])
   self.assertEqual(set(result['comment_ids']),{'1','2'});self.assertFalse(result['list_count_verified']);self.assertFalse(result['visible_count_verified']);self.assertFalse(result['web_listing_complete'])
+
+ def test_additional_android_sorts_recover_a_record_without_restrictive_filter(self):
+  mobile=[{'sort_order':order,'comment_count':2,'comments':[comment('1')],'has_more_comments':False,'has_more_headload_comments':False} for order in ('recent','popular')]
+  # Web connection is unavailable; a separate Android sort supplies the missing ID.
+  extra=[{'sort_order':order,'comment_count':2,'comments':[comment('1'),comment('2')],'has_more_comments':False,'has_more_headload_comments':False} for order in ('meta_verified','following','questions','follower_count')]
+  result=self.exhaustive(mobile+[{'status':'fail'}]+extra)
+  self.assertEqual(set(result['comment_ids']),{'1','2'})
+  self.assertEqual(result['supplemental_orders'],['meta_verified','following','questions','follower_count'])
+  self.assertTrue(result['ok'])
+  # A corroborated visible-only scope cannot be asserted after new identities appear.
+  self.assertFalse(result['visible_count_verified'])

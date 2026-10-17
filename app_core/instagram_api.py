@@ -35,6 +35,15 @@ def reconcile_comment_total(details, response):
     """Separate exhausted, corroborated visible listings from Instagram's aggregate counter."""
     if not isinstance(response, dict) or not response.get('ok') or response.get('incomplete'):
         return details
+    # Comments can arrive between media/info and successive comment pages.
+    # Never let an older, lower info counter make a changing scan look complete.
+    observed = response.get('reported_max_comment_count')
+    previous = (details or {}).get('comment_count')
+    if (type(observed) is int and observed >= 0 and type(previous) is int
+            and observed > previous and not (details or {}).get('facebook_comment_count')
+            and set(response.get('scanned_orders') or []) == {'recent', 'popular'}):
+        details = dict(details or {}, comment_count=observed,
+                       reported_comment_count=observed, comment_count_notice=None)
     visible = response.get('visible_count_verified') is True
     count = response.get('visible_comment_count') if visible else response.get('list_comment_count')
     ids = response.get('comment_ids') or []
