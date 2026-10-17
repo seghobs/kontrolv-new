@@ -18,11 +18,12 @@ async def fetch_complete_comments(media_id, token_record, session, orders=('rece
     totals_valid = True
     active_ids = None
     username = api._get_username(token_record)
-    async def fetch(path, params):
+    async def fetch(path, params, *, graphql=False):
         token = api.current_token(username, token_record.get('token', ''))
         headers = api.build_auth_headers(token, token_record.get('user_agent', ''), token_record.get('android_id_yeni', ''), token_record.get('device_id', ''), username=username)
         headers['Accept-Encoding'] = 'gzip, deflate'
-        url = 'https://i.instagram.com/api/v1/media/'+str(media_id)+'/'+path
+        url = ('https://www.instagram.com/graphql/query/' if graphql else
+               'https://i.instagram.com/api/v1/media/'+str(media_id)+'/'+path)
         headers, revision = api.prepare_async_headers(username, url, headers)
         async with session.get(url, params=params, headers=headers, proxy=api.get_outbound_proxy(), timeout=aiohttp.ClientTimeout(total=10)) as response:
             from app_core.session_state import update_session, response_cookies
@@ -110,9 +111,47 @@ async def fetch_complete_comments(media_id, token_record, session, orders=('rece
         logger.warning('Full comment endpoint failed: %s', type(error).__name__)
         complete = False
     list_count = next(iter(reported_totals)) if len(reported_totals) == 1 else None
+    # Instaloader's independent web connection can expose records absent from
+    # the mobile listing. Use it only on a discrepancy, with bounded pagination.
+    web_ids = set()
+    web_complete = False
+    if complete and type(list_count) is int and len(records) < list_count and {'recent', 'popular'} <= exhausted_orders:
+        try:
+            cursor = None
+            cursors = set()
+            for _ in range(api.MAX_COMMENT_PAGES):
+                data = await fetch('', {'query_hash': '97b41c52301f77ce508f55e66d17620e',
+                                       'variables': json.dumps({'shortcode': api_code(media_id), 'first': 50, **({'after': cursor} if cursor else {})})}, graphql=True)
+                connection = data['data']['shortcode_media']['edge_media_to_parent_comment']
+                if type(connection.get('count')) is not int or connection['count'] != list_count:
+                    break
+                edges = connection['edges']
+                if not isinstance(edges, list): break
+                for edge in edges:
+                    node = edge['node']
+                    # A missing author is not evidence of absence. Keep the
+                    # original mobile completeness state on a failed fallback.
+                    user = node.get('owner') or {}
+                    if not node.get('id') or not is_valid_username(user.get('username', '')):
+                        raise ValueError('Unattributable web comment')
+                    web_ids.update(add([{'pk': node['id'], 'user': user, 'text': node.get('text', '')}]))
+                    replies = node.get('edge_threaded_comments') or {}
+                    if replies.get('count', 0):
+                        # Do not assert a complete web listing without replies.
+                        raise ValueError('Web replies require separate pagination')
+                page = connection['page_info']
+                if page.get('has_next_page') is False:
+                    web_complete = True
+                    break
+                cursor = page.get('end_cursor')
+                if not cursor or str(cursor) in cursors: break
+                cursors.add(str(cursor))
+        except Exception as error:
+            logger.info('Independent comment connection unavailable: %s', type(error).__name__)
     list_verified = bool(complete and totals_valid and {'recent','popular'} <= set(order_ids)
                          and type(list_count) is int and len(records) == list_count
-                         and all(ids == set(records) for ids in order_ids.values()))
+                         and (all(ids == set(records) for ids in order_ids.values())
+                              or (web_complete and web_ids == set(records))))
     visible_verified = bool(complete and totals_valid and {'recent','popular'} <= exhausted_orders
                             and len(reported_totals) == 1 and type(list_count) is int
                             and 0 < len(records) <= list_count
@@ -121,7 +160,19 @@ async def fetch_complete_comments(media_id, token_record, session, orders=('rece
                 comments=list(records.values()), comment_ids=list(records), scanned_orders=list(orders),
                 list_count_verified=list_verified, list_comment_count=list_count if list_verified else None,
                 visible_count_verified=visible_verified, visible_comment_count=len(records) if visible_verified else None,
-                reported_list_comment_count=list_count)
+                reported_list_comment_count=list_count,
+                web_listing_complete=web_complete, web_comment_count=len(web_ids) if web_complete else None)
+
+
+def api_code(media_id):
+    """Convert the numeric media PK to the shortcode required by web GraphQL."""
+    alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+    value = int(str(media_id).split('_')[0])
+    code = ''
+    while value:
+        value, digit = divmod(value, 64)
+        code = alphabet[digit] + code
+    return code or 'A'
 
 
 async def recover_comment_list(media_id, token, session, details, response):

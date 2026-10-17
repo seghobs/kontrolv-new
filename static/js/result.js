@@ -880,6 +880,11 @@ function showPostDetailsModal(index) {
     if (fullnameEl) fullnameEl.textContent = data.owner_fullname ? data.owner_fullname : "İsim Bilgisi Yok";
     if (likesEl) likesEl.textContent = Number(data.like_count).toLocaleString("tr-TR");
     if (commentsEl) commentsEl.textContent = Number(data.comment_count).toLocaleString("tr-TR");
+    const coverageEl = document.getElementById("modalCommentCoverage");
+    if (coverageEl) {
+        coverageEl.textContent = data.comment_count_notice || '';
+        coverageEl.hidden = !data.comment_count_notice;
+    }
     if (captionEl) captionEl.textContent = data.caption ? data.caption : "Açıklama bulunmuyor.";
     if (linkBtn) linkBtn.href = data.link;
     

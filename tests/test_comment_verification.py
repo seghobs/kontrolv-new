@@ -91,3 +91,33 @@ class CompleteCommentTests(unittest.TestCase):
    self.assertFalse(self.exhaustive(pages)['visible_count_verified'])
   pages=[{'sort_order':order,'comment_count':2,'comments':[comment(str(i))],'has_more_comments':False,'has_more_headload_comments':False} for i,order in enumerate(('recent','popular'))]
   self.assertFalse(self.exhaustive(pages)['visible_count_verified'])
+
+ def test_web_connection_recovers_mobile_missing_record(self):
+  mobile=[{'sort_order':order,'comment_count':2,'comments':[comment('1')],'has_more_comments':False,'has_more_headload_comments':False} for order in ('recent','popular')]
+  web={'data':{'shortcode_media':{'edge_media_to_parent_comment':{'count':2,'edges':[{'node':{'id':cid,'owner':{'username':'alice'},'text':'same'}} for cid in ('1','2')],'page_info':{'has_next_page':False}}}}}
+  result=self.exhaustive(mobile+[web])
+  self.assertEqual(set(result['comment_ids']),{'1','2'});self.assertTrue(result['list_count_verified']);self.assertTrue(result['web_listing_complete'])
+
+ def test_web_connection_corroborates_visible_counter_gap(self):
+  mobile=[{'sort_order':order,'comment_count':2,'comments':[comment('1')],'has_more_comments':False,'has_more_headload_comments':False} for order in ('recent','popular')]
+  web={'data':{'shortcode_media':{'edge_media_to_parent_comment':{'count':2,'edges':[{'node':{'id':'1','owner':{'username':'alice'},'text':'same'}}],'page_info':{'has_next_page':False}}}}}
+  result=self.exhaustive(mobile+[web])
+  self.assertTrue(result['visible_count_verified']);self.assertTrue(result['web_listing_complete']);self.assertEqual(result['web_comment_count'],1);self.assertFalse(result['list_count_verified'])
+
+ def test_web_failure_does_not_discard_mobile_authors(self):
+  mobile=[{'sort_order':order,'comment_count':2,'comments':[comment('1')],'has_more_comments':False,'has_more_headload_comments':False} for order in ('recent','popular')]
+  result=self.exhaustive(mobile+[{'status':'fail'}])
+  self.assertTrue(result['visible_count_verified']);self.assertEqual(result['comment_ids'],['1']);self.assertFalse(result['web_listing_complete'])
+
+ def test_web_cursor_pagination_retains_all_identities(self):
+  mobile=[{'sort_order':order,'comment_count':3,'comments':[comment('1')],'has_more_comments':False,'has_more_headload_comments':False} for order in ('recent','popular')]
+  def page(ids,more,cursor=None):
+   return {'data':{'shortcode_media':{'edge_media_to_parent_comment':{'count':3,'edges':[{'node':{'id':cid,'owner':{'username':'alice'},'text':'same'}} for cid in ids],'page_info':{'has_next_page':more,'end_cursor':cursor}}}}}
+  result=self.exhaustive(mobile+[page(['1','2'],True,'next'),page(['2','3'],False)])
+  self.assertTrue(result['list_count_verified']);self.assertEqual(len(result['comments']),3)
+
+ def test_web_loop_does_not_claim_full_counter(self):
+  mobile=[{'sort_order':order,'comment_count':3,'comments':[comment('1')],'has_more_comments':False,'has_more_headload_comments':False} for order in ('recent','popular')]
+  web={'data':{'shortcode_media':{'edge_media_to_parent_comment':{'count':3,'edges':[{'node':{'id':'2','owner':{'username':'bob'},'text':'hello'}}],'page_info':{'has_next_page':True,'end_cursor':'loop'}}}}}
+  result=self.exhaustive(mobile+[web,web])
+  self.assertEqual(set(result['comment_ids']),{'1','2'});self.assertFalse(result['list_count_verified']);self.assertFalse(result['visible_count_verified']);self.assertFalse(result['web_listing_complete'])

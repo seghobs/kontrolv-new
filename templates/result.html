@@ -203,7 +203,6 @@
                         </div>
 
                         <div class="member-note-slot">{% include '_member_notes.html' %}</div>
-                        {% if item.comment_count_notice %}<p class="mx-3 mt-2 small" role="note" style="color:var(--muted-foreground)">{{ item.comment_count_notice }}</p>{% endif %}
                         {% if item.error %}
                         <div class="alert alert-warning mx-3 mt-3" role="status" style="background:#c4956a15;border:1px solid #c4956a55;color:#eadbcb;border-radius:10px;">
                             {% if item.verification_pending %}
@@ -474,6 +473,7 @@
                     </div>
                 </div>
 
+                <p id="modalCommentCoverage" class="small" hidden style="color:var(--muted-foreground)"></p>
                 <div style="margin-bottom: 20px;">
                     <label style="font-weight: 600; color: var(--accent-caramel); display: block; margin-bottom: 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;"><i class="fas fa-quote-left me-1"></i>Paylaşım Açıklaması:</label>
                     <div id="modalPostCaption" style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border); border-radius: 12px; padding: 14px; max-height: 150px; overflow-y: auto; color: rgba(255,255,255,0.95); font-style: italic; line-height: 1.6; font-size: 13px; white-space: pre-wrap; word-break: break-word;"></div>
@@ -763,6 +763,7 @@
             video_url: {{ (item.video_url or '') | tojson | safe }},
             like_count: {{ item.like_count or 0 }},
             comment_count: {{ item.comment_count or 0 }},
+            comment_count_notice: {{ (item.comment_count_notice or '') | tojson | safe }},
             caption: {{ (item.caption or '') | tojson | safe }},
             comments_list: {{ (item.comments_list or []) | tojson | safe }},
             likers_list: {{ (item.likers_list or []) | tojson | safe }},
