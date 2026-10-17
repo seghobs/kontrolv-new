@@ -191,6 +191,7 @@ def run(payload, progress):
                             if verified.get('ok'):
                                 from app_core.instagram_api import reconcile_comment_total
                                 details = reconcile_comment_total(details, verified)
+                                if details.get('comment_count_notice'): row['reason'] = details['comment_count_notice']
                                 response = verified
                                 row['comments'], obtained_count, complete = member_comments(response, username)
                             else:

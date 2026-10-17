@@ -75,3 +75,19 @@ class CompleteCommentTests(unittest.TestCase):
    with patch('app_core.instagram_api.current_token',return_value='test'),patch('app_core.instagram_api.prepare_async_headers',side_effect=lambda u,url,h:(h,0)),patch('app_core.instagram_api.build_auth_headers',return_value={}),patch('app_core.session_state.update_session'),patch('app_core.instagram_api.get_outbound_proxy',return_value=None):
     result=asyncio.run(fetch_complete_comments('1',{'username':'test'},session))
    self.assertFalse(result['list_count_verified'])
+
+ def exhaustive(self, pages):
+  session=Session(pages)
+  with patch('app_core.instagram_api.current_token',return_value='test'),patch('app_core.instagram_api.prepare_async_headers',side_effect=lambda u,url,h:(h,0)),patch('app_core.instagram_api.build_auth_headers',return_value={}),patch('app_core.session_state.update_session'),patch('app_core.instagram_api.get_outbound_proxy',return_value=None):
+   return asyncio.run(fetch_complete_comments('1',{'username':'test'},session))
+ def test_exhausted_identical_visible_ids_do_not_require_counter_equality(self):
+  pages=[{'sort_order':order,'comment_count':2,'comments':[comment('1')],'has_more_comments':False,'has_more_headload_comments':False} for order in ('recent','popular')]
+  result=self.exhaustive(pages)
+  self.assertTrue(result['visible_count_verified']);self.assertEqual(result['visible_comment_count'],1)
+  self.assertFalse(result['list_count_verified']);self.assertEqual(result['reported_list_comment_count'],2)
+ def test_unfinished_empty_or_different_lists_are_not_visible_completeness(self):
+  for override in ({'has_more_headload_comments':True},{'comments':[]},{'has_more_comments':None}):
+   pages=[{'sort_order':order,'comment_count':2,'comments':[comment('1')],'has_more_comments':False,'has_more_headload_comments':False,**override} for order in ('recent','popular')]
+   self.assertFalse(self.exhaustive(pages)['visible_count_verified'])
+  pages=[{'sort_order':order,'comment_count':2,'comments':[comment(str(i))],'has_more_comments':False,'has_more_headload_comments':False} for i,order in enumerate(('recent','popular'))]
+  self.assertFalse(self.exhaustive(pages)['visible_count_verified'])

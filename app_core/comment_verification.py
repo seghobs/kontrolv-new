@@ -13,6 +13,7 @@ async def fetch_complete_comments(media_id, token_record, session, orders=('rece
     complete = True
     failure_status = 200
     order_ids = {}
+    exhausted_orders = set()
     reported_totals = set()
     totals_valid = True
     active_ids = None
@@ -79,6 +80,7 @@ async def fetch_complete_comments(media_id, token_record, session, orders=('rece
                 cursor = data.get('next_min_id') or data.get('next_max_id')
                 if not cursor:
                     if data.get('has_more_comments') or data.get('has_more_headload_comments'): complete = False
+                    elif data.get('has_more_comments') is False and data.get('has_more_headload_comments') is False: exhausted_orders.add(order)
                     break
                 key = 'min_id' if data.get('next_min_id') else 'max_id'
                 if (key, str(cursor)) in cursors:
@@ -111,9 +113,15 @@ async def fetch_complete_comments(media_id, token_record, session, orders=('rece
     list_verified = bool(complete and totals_valid and {'recent','popular'} <= set(order_ids)
                          and type(list_count) is int and len(records) == list_count
                          and all(ids == set(records) for ids in order_ids.values()))
+    visible_verified = bool(complete and totals_valid and {'recent','popular'} <= exhausted_orders
+                            and len(reported_totals) == 1 and type(list_count) is int
+                            and 0 < len(records) <= list_count
+                            and all(ids == set(records) for ids in order_ids.values()))
     return dict(ok=complete, status=200 if complete else failure_status, incomplete=not complete,
                 comments=list(records.values()), comment_ids=list(records), scanned_orders=list(orders),
-                list_count_verified=list_verified, list_comment_count=list_count if list_verified else None)
+                list_count_verified=list_verified, list_comment_count=list_count if list_verified else None,
+                visible_count_verified=visible_verified, visible_comment_count=len(records) if visible_verified else None,
+                reported_list_comment_count=list_count)
 
 
 async def recover_comment_list(media_id, token, session, details, response):

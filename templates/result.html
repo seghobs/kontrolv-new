@@ -203,6 +203,7 @@
                         </div>
 
                         <div class="member-note-slot">{% include '_member_notes.html' %}</div>
+                        {% if item.comment_count_notice %}<p class="mx-3 mt-2 small" role="note" style="color:var(--muted-foreground)">{{ item.comment_count_notice }}</p>{% endif %}
                         {% if item.error %}
                         <div class="alert alert-warning mx-3 mt-3" role="status" style="background:#c4956a15;border:1px solid #c4956a55;color:#eadbcb;border-radius:10px;">
                             {% if item.verification_pending %}
