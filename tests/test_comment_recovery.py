@@ -38,3 +38,29 @@ class CommentRecoveryTests(unittest.IsolatedAsyncioTestCase):
   row=incomplete_comment_post('url',{'comment_count':3},'owner',[('alice','text'),('outsider','text')],{'alice','bob'})
   self.assertEqual(row['commenters'],['alice']);self.assertEqual(row['eksikler'],[])
   self.assertTrue(row['verification_pending']);self.assertEqual(row['obtained_comment_count'],2)
+
+ async def test_smaller_refreshed_counter_does_not_erase_gap(self):
+  details={'comment_count':3,'comment_count_verified':True}
+  response={'ok':True,'comments':[('alice','one'),('bob','two')], 'scanned_orders':['recent','popular']}
+  with patch('app_core.instagram_api.get_post_details_async',AsyncMock(return_value={'comment_count':2,'comment_count_verified':True})),patch('app_core.instagram_api.fetch_comment_usernames_async',AsyncMock(return_value=response)),patch('app_core.comment_verification.recover_other_account',AsyncMock(side_effect=lambda m,t,s,d,r:(d,r))):
+   result,_=await recover_comment_list('id',{},None,details,response)
+  self.assertEqual(result['comment_count'],3)
+
+ async def test_other_active_account_recovers_real_identity(self):
+  from app_core.comment_verification import recover_other_account
+  details={'comment_count':2,'comment_count_verified':True}
+  original={'ok':True,'comment_ids':['1'],'comments':[('alice','same')]}
+  other=dict(username='second',is_active=True,token='test',user_agent='test',android_id_yeni='test',device_id='test')
+  recovered={'ok':True,'status':200,'comment_ids':['1','2'],'comments':[('alice','same'),('bob','same')],'reported_max_comment_count':2}
+  with patch('app_core.storage.load_tokens',return_value=[other]),patch('app_core.session_state.load_from_db'),patch('app_core.comment_verification.fetch_complete_comments',AsyncMock(return_value=recovered)):
+   result,response=await recover_other_account('id',{'username':'first'},None,details,original)
+  self.assertEqual(response['comment_ids'],['1','2'])
+  self.assertEqual(len(response['comments']),2)
+  self.assertEqual(response['additional_accounts_checked'],1)
+
+ async def test_inactive_accounts_never_used_for_recovery(self):
+  from app_core.comment_verification import recover_other_account
+  response={'ok':True,'comment_ids':['1'],'comments':[('alice','text')]}
+  with patch('app_core.storage.load_tokens',return_value=[{'username':'inactive','is_active':False}]),patch('app_core.comment_verification.fetch_complete_comments',AsyncMock()) as fetch:
+   await recover_other_account('id',{'username':'first'},None,{'comment_count':2},response)
+  fetch.assert_not_awaited()

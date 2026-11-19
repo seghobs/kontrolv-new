@@ -107,16 +107,42 @@ async def fetch_complete_comments(media_id, token_record, session, orders=('rece
                 cursors.add(str(cursor))
                 params = {'min_id' if data.get('next_min_child_cursor') else 'max_id': cursor}
             if len(children) < expected: complete = False
+            for ids in order_ids.values():
+                if cid in ids:
+                    ids.update(children)
     except Exception as error:
         logger.warning('Full comment endpoint failed: %s', type(error).__name__)
         complete = False
+    # Recent pagination can terminate early with both continuation flags false.
+    # Revisit only the shorter exhausted order, retaining identities across passes.
+    # A repeated pass never lowers the aggregate count or proves unseen authors.
+    if complete and set(orders) == {'recent', 'popular'} and len(reported_totals) == 1:
+        for attempt in range(3):
+            if order_ids['recent'] == order_ids['popular']:
+                break
+            shorter = min(order_ids, key=lambda order: len(order_ids[order]))
+            retry = await fetch_complete_comments(media_id, token_record, session, orders=(shorter,))
+            if retry.get('status') in (401, 403, 429):
+                complete = False
+                failure_status = retry['status']
+                break
+            if (not retry.get('ok') or retry.get('incomplete')
+                    or not retry.get('pagination_verified')
+                    or retry.get('reported_list_comment_count') not in reported_totals):
+                break
+            retry_ids = set(retry.get('comment_ids') or [])
+            order_ids[shorter].update(retry_ids)
+            for cid, record in zip(retry.get('comment_ids', []), retry.get('comments', [])):
+                records[cid] = record
+            logger.info('COMMENT_RESCAN order=%s attempt=%s unique=%s', shorter, attempt + 1, len(order_ids[shorter]))
     list_count = next(iter(reported_totals)) if len(reported_totals) == 1 else None
     # Instaloader's independent web connection can expose records absent from
     # the mobile listing. Use it only on a discrepancy, with bounded pagination.
     web_ids = set()
     web_complete = False
     supplemental_orders = []
-    if complete and type(list_count) is int and len(records) < list_count and {'recent', 'popular'} <= exhausted_orders:
+    if (complete and type(list_count) is int and len(records) < list_count
+            and {'recent', 'popular'} <= exhausted_orders):
         try:
             cursor = None
             cursors = set()
@@ -149,23 +175,46 @@ async def fetch_complete_comments(media_id, token_record, session, orders=('rece
                 cursors.add(str(cursor))
         except Exception as error:
             logger.info('Independent comment connection unavailable: %s', type(error).__name__)
+            if getattr(error, 'status', None) in (401, 403, 429):
+                complete = False
+                failure_status = error.status
     # These additional sort values were verified in the Android APK and live
     # traffic tests. They are recovery views, never substitutes for unfiltered
     # recent/popular scans (notably, Meta Verified-only is a restrictive filter).
-    if complete and type(list_count) is int and len(records) < list_count and {'recent', 'popular'} <= exhausted_orders:
+    if (complete and type(list_count) is int and len(records) < list_count
+            and {'recent', 'popular'} <= exhausted_orders):
         supplemental_orders = ['meta_verified', 'following', 'questions', 'follower_count']
         extra = await fetch_complete_comments(media_id, token_record, session, orders=tuple(supplemental_orders))
         for cid, record in zip(extra.get('comment_ids', []), extra.get('comments', [])):
             records[cid] = record
-    list_verified = bool(complete and totals_valid and {'recent','popular'} <= set(order_ids)
-                         and type(list_count) is int and len(records) == list_count
-                         and (all(ids == set(records) for ids in order_ids.values())
-                              or (web_complete and web_ids == set(records))))
+        if extra.get('status') in (401, 403, 429):
+            complete = False
+            failure_status = extra['status']
+    recovery_sources = []
+    recovery_status = None
+    if (set(orders) == {'recent', 'popular'} and failure_status not in (401, 403, 429)
+            and type(list_count) is int and len(records) < list_count):
+        from app_core.comment_sources import fetch_comment_supplements
+        extra = await fetch_comment_supplements(media_id, token_record, session, records, expected_count=list_count)
+        recovery_sources = extra.get('sources', [])
+        recovery_status = extra.get('stopped_status')
+        if recovery_status in (401, 403, 429):
+            complete = False
+            failure_status = recovery_status
+        for cid, record in zip(extra.get('comment_ids', []), extra.get('comments', [])):
+            records[cid] = record
+        observed = extra.get('reported_max_comment_count')
+        if type(observed) is int:
+            reported_totals.add(observed)
+        list_count = next(iter(reported_totals)) if len(reported_totals) == 1 else None
+    list_verified = bool(complete and totals_valid and {'recent', 'popular'} <= set(order_ids)
+                         and type(list_count) is int and len(records) == list_count)
     visible_verified = bool(complete and totals_valid and {'recent','popular'} <= exhausted_orders
                             and len(reported_totals) == 1 and type(list_count) is int
                             and 0 < len(records) <= list_count
                             and all(ids == set(records) for ids in order_ids.values()))
-    return dict(ok=complete, status=200 if complete else failure_status, incomplete=not complete,
+    logger.info('COMMENT_PROOF complete=%s totals_valid=%s order_counts=%s records=%s reported=%s visible=%s', complete, totals_valid, {k:len(v) for k,v in order_ids.items()}, len(records), list_count, visible_verified)
+    return dict(recovery_sources=recovery_sources, recovery_status=recovery_status, pagination_verified=bool(complete and totals_valid and set(orders) <= exhausted_orders), ok=complete, status=200 if complete else failure_status, incomplete=not complete,
                 comments=list(records.values()), comment_ids=list(records), scanned_orders=list(orders),
                 list_count_verified=list_verified, list_comment_count=list_count if list_verified else None,
                 visible_count_verified=visible_verified, visible_comment_count=len(records) if visible_verified else None,
@@ -194,20 +243,71 @@ async def recover_comment_list(media_id, token, session, details, response):
         return details, response
     if isinstance(response, dict) and not response.get('incomplete') and api.comments_cover_total(details, comments):
         return details, response
-    verified = await fetch_complete_comments(media_id, token, session)
+    # A full scanner already tried the same account's recovery sources. Avoid
+    # doing the entire scan twice merely because Instagram's counter is higher.
+    if isinstance(response, dict) and set(response.get('scanned_orders') or []) == {'recent', 'popular'}:
+        verified = response
+    else:
+        verified = await fetch_complete_comments(media_id, token, session)
     logger.info('COMMENT_RECOVERY expected=%s stream=%s recovered=%s complete=%s',details.get('comment_count'),len(comments),len(verified.get('comments',[])),verified.get('ok'))
     if verified.get('ok'):
         refreshed = await api.get_post_details_async(media_id, token, session)
         if refreshed and refreshed.get('comment_count_verified'):
-            details = refreshed
+            # A smaller later counter cannot erase an unresolved comment.
+            details = dict(refreshed, comment_count=max(details.get('comment_count', 0), refreshed['comment_count']))
         details = api.reconcile_comment_total(details, verified)
         if len(verified.get('comments',[])) >= len(comments):
             response = verified
-        if not api.comments_cover_total(details, response.get('comments', [])):
+        if (not api.comments_cover_total(details, response.get('comments', []))
+                and response.get('recovery_status') not in (401, 403, 429)):
             retry = await api.fetch_comment_usernames_async(media_id, token, session)
             if retry.get('ok') and not retry.get('incomplete') and api.comments_cover_total(details, retry.get('comments', [])):
                 response = retry
             logger.info('COMMENT_RECOVERY retry=%s complete=%s',len(retry.get('comments',[])),api.comments_cover_total(details,response.get('comments',[])))
+    if (not api.comments_cover_total(details, response.get('comments', []))
+            and response.get('status') not in (401, 403, 429)
+            and response.get('recovery_status') not in (401, 403, 429)):
+        try:
+            details, response = await recover_other_account(media_id, token, session, details, response)
+        except Exception as error:
+            logger.warning('Other-account comment recovery unavailable: %s', type(error).__name__)
+    return details, response
+
+
+async def recover_other_account(media_id, token, session, details, response):
+    """Try one other already-active, authorized account without re-login.
+
+    Account-specific visibility can differ. Merge only by actual comment PK,
+    preserve the highest observed total, and never rotate to evade a rate limit.
+    """
+    from app_core.storage import load_tokens
+    from app_core.session_state import load_from_db
+    from app_core.comment_sources import fetch_comment_supplements
+    records = dict(zip(response.get('comment_ids') or [], response.get('comments') or []))
+    if not records or len(records) != len(response.get('comments') or []):
+        return details, response
+    candidates = [record for record in load_tokens()
+                  if record.get('is_active') and record.get('username') != token.get('username')
+                  and all(record.get(k) for k in ('token', 'user_agent', 'android_id_yeni', 'device_id'))]
+    for other in candidates[:1]:
+        load_from_db(other['username'])
+        scan = await fetch_complete_comments(media_id, other, session, orders=('popular',))
+        if scan.get('status') in (401, 403, 429):
+            break
+        for cid, record in zip(scan.get('comment_ids', []), scan.get('comments', [])):
+            records[cid] = record
+        if len(records) < details.get('comment_count', 0):
+            extra = await fetch_comment_supplements(media_id, other, session, records, expected_count=details.get('comment_count'))
+            for cid, record in zip(extra.get('comment_ids', []), extra.get('comments', [])):
+                records[cid] = record
+            scan['reported_max_comment_count'] = max(scan.get('reported_max_comment_count') or 0,
+                                                      extra.get('reported_max_comment_count') or 0)
+        observed = scan.get('reported_max_comment_count')
+        if type(observed) is int and observed > details.get('comment_count', 0):
+            details = dict(details, comment_count=observed)
+        response = dict(response, comment_ids=list(records), comments=list(records.values()),
+                        additional_accounts_checked=1)
+        logger.info('COMMENT_ACCOUNT_RECOVERY records=%s expected=%s', len(records), details.get('comment_count'))
     return details, response
 
 

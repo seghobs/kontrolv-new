@@ -32,39 +32,21 @@ def comment_totals(media):
 
 
 def reconcile_comment_total(details, response):
-    """Separate exhausted, corroborated visible listings from Instagram's aggregate counter."""
-    if not isinstance(response, dict) or not response.get('ok') or response.get('incomplete'):
+    """Preserve the required total: agreeing visible lists cannot prove absence.
+
+    A hidden/unavailable comment may belong to any unobserved group member.
+    Counts can rise during a scan, but no recovery source may silently lower them.
+    """
+    if not isinstance(response, dict):
         return details
-    # Comments can arrive between media/info and successive comment pages.
-    # Never let an older, lower info counter make a changing scan look complete.
     observed = response.get('reported_max_comment_count')
     previous = (details or {}).get('comment_count')
     if (type(observed) is int and observed >= 0 and type(previous) is int
             and observed > previous and not (details or {}).get('facebook_comment_count')
             and set(response.get('scanned_orders') or []) == {'recent', 'popular'}):
-        details = dict(details or {}, comment_count=observed,
-                       reported_comment_count=observed, comment_count_notice=None)
-    visible = response.get('visible_count_verified') is True
-    count = response.get('visible_comment_count') if visible else response.get('list_comment_count')
-    ids = response.get('comment_ids') or []
-    if (not (response.get('list_count_verified') or visible) or type(count) is not int or count < 0
-            or set(response.get('scanned_orders') or []) != {'recent','popular'}
-            or len(ids) != len(set(ids)) or len(ids) != count
-            or len(response.get('comments') or []) != count
-            or (details or {}).get('facebook_comment_count', 0) != 0):
-        return details
-    if (details or {}).get('comment_count') == count and (details or {}).get('comment_count_verified'):
-        return details
-    aggregate = max((details or {}).get('comment_count') or 0,response.get('reported_list_comment_count') or 0)
-    notice = None
-    if visible and aggregate > count:
-        notice = (f'Instagram sayacı {aggregate}; erişilebilen {count} yorum iki sıralamada aynı kimliklerle '
-                  've son sayfaya kadar tarandı. Eksik listesi bu erişilebilir yorumlara göredir; '
-                  'sayaç farkındaki yorum API’de görünmüyor.')
-    logger.info('COMMENT_COUNT_RECONCILED media=%s listing=%s scope=%s', (details or {}).get('comment_count'), count, 'visible' if notice else 'listing')
-    return dict(details or {}, media_comment_count=(details or {}).get('comment_count'),
-                comment_count=count, comment_count_verified=True, comment_count_source='two_complete_orders',
-                comment_count_notice=notice)
+        return dict(details or {}, comment_count=observed,
+                    reported_comment_count=observed, comment_count_notice=None)
+    return details
 
 
 def comments_cover_total(details, comments):

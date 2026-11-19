@@ -22,11 +22,11 @@ class CrossPlatformCommentTests(unittest.TestCase):
 
  def confirmed_listing(self):
   return {'ok':True,'status':200,'incomplete':False,'scanned_orders':['recent','popular'],'list_count_verified':True,'list_comment_count':1,'comment_ids':['comment1'],'comments':[('alice','hello')]}
- def test_listing_count_can_resolve_stale_media_aggregate(self):
+ def test_smaller_listing_never_lowers_required_media_total(self):
   from app_core.instagram_api import reconcile_comment_total
   details=reconcile_comment_total({'comment_count':2,'comment_count_verified':True},self.confirmed_listing())
-  self.assertEqual(details['comment_count'],1);self.assertEqual(details['media_comment_count'],2)
-  self.assertTrue(comments_cover_total(details,[('alice','hello')]))
+  self.assertEqual(details['comment_count'],2)
+  self.assertFalse(comments_cover_total(details,[('alice','hello')]))
  def test_incomplete_unconfirmed_or_single_order_cannot_lower_total(self):
   from app_core.instagram_api import reconcile_comment_total
   original={'comment_count':2,'comment_count_verified':True}
@@ -38,12 +38,12 @@ class CrossPlatformCommentTests(unittest.TestCase):
   original={'comment_count':2,'comment_count_verified':True,'facebook_comment_count':1}
   self.assertEqual(reconcile_comment_total(original,self.confirmed_listing()),original)
 
- def test_visible_scope_is_explicit_when_aggregate_stays_higher(self):
+ def test_agreeing_visible_lists_cannot_establish_full_comment_coverage(self):
   from app_core.instagram_api import reconcile_comment_total
   response={**self.confirmed_listing(),'list_count_verified':False,'list_comment_count':None,'visible_count_verified':True,'visible_comment_count':1,'reported_list_comment_count':2}
   details=reconcile_comment_total({'comment_count':2,'comment_count_verified':True},response)
-  self.assertEqual(details['comment_count'],1);self.assertEqual(details['media_comment_count'],2)
-  self.assertIn('erişilebilir',details['comment_count_notice']);self.assertIn('2',details['comment_count_notice'])
+  self.assertEqual(details['comment_count'],2)
+  self.assertFalse(comments_cover_total(details,response['comments']))
  def test_unverified_visible_scope_cannot_override_counter(self):
   from app_core.instagram_api import reconcile_comment_total
   response={**self.confirmed_listing(),'list_count_verified':False,'list_comment_count':None,'visible_count_verified':False,'visible_comment_count':1}
@@ -60,6 +60,6 @@ class CrossPlatformCommentTests(unittest.TestCase):
  def test_untrusted_counter_increase_cannot_replace_media_total(self):
   from app_core.instagram_api import reconcile_comment_total
   original={'comment_count':1,'comment_count_verified':True}
-  for override in ({'reported_max_comment_count':'2'},{'reported_max_comment_count':True},{'ok':False},{'incomplete':True},{'scanned_orders':['popular']}):
+  for override in ({'reported_max_comment_count':'2'},{'reported_max_comment_count':True},{'scanned_orders':['popular']}):
    response={**self.confirmed_listing(),'list_count_verified':False,'reported_max_comment_count':2,**override}
    self.assertEqual(reconcile_comment_total(original,response),original)

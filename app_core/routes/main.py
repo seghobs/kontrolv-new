@@ -242,14 +242,17 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes,
         async def _fetch_single(link_single):
             if link_key(link_single) in {link_key(u) for u in rules['excluded']}:
                 return dict(post_link=link_single,eksikler=[],commenters=[],comments_list=[],skipped_reason='Paylaşım kapsam dışında')
-            if checkpoints and link_single in checkpoints:
+            if (checkpoints and link_single in checkpoints
+                    and not checkpoints[link_single].get('comment_count_notice')):
                 restored = dict(checkpoints[link_single])
                 restored['commenters_normalized'] = set(restored.get('commenters_normalized', []))
                 restored['source'] = 'checkpoint'
                 return restored
             if (only_missing or unknown_only) and prev_result:
                 prev_link_res = next((lr for lr in prev_result.get("links", []) if lr.get("post_link", "").strip().rstrip('/') == link_single), None)
-                if prev_link_res and not prev_link_res.get("error") and (unknown_only or not prev_link_res.get("eksikler")):
+                if (prev_link_res and not prev_link_res.get("error")
+                        and not prev_link_res.get('comment_count_notice')
+                        and (unknown_only or not prev_link_res.get("eksikler"))):
                     tracker["done"] += 1
                     if progress_callback:
                         progress_callback(tracker["done"], tracker["total"], f"Gönderi {tracker['done']}/{tracker['total']} atlandı (Tamamlanmış)")

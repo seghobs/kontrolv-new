@@ -169,12 +169,12 @@ class SharedUIBrowserTests(unittest.TestCase):
             page.locator('[data-matrix-missing]').uncheck();self.assertTrue(page.locator('[data-matrix-user=alice]').is_visible())
             self.assertEqual(requests,['POST']);self.assertFalse(errors,errors)
 
-    def test_counter_diagnostic_is_only_in_details_and_resets_between_posts(self):
+    def test_historical_counter_gap_is_visible_and_details_reset_between_posts(self):
         notice='Instagram sayacı 25; erişilebilen 24 yorum. Eksik listesi erişilebilir yorumlara göredir.'
         identifier=jobs.enqueue('manual',{});jobs.claim_request(identifier,'coverage')
         jobs.complete(identifier,'coverage',{'links':[{'post_link':'https://www.instagram.com/p/Coverage/','sender':'alice','eksikler':['bob'],'comment_count':24,'comment_count_notice':notice},{'post_link':'https://www.instagram.com/p/Other/','sender':'bob','eksikler':[]}],'group':['alice','bob']})
         page,errors=self.page(1440);page.goto('http://ui.test/result/'+identifier,wait_until='domcontentloaded')
-        self.assertEqual(page.get_by_text(notice,exact=True).count(),0)
+        self.assertEqual(page.get_by_text(notice,exact=True).count(),1)
         page.evaluate("showPostDetailsModal('1')")
         self.assertTrue(page.locator('#modalCommentCoverage').is_visible())
         self.assertEqual(page.locator('#modalCommentCoverage').inner_text(),notice)
