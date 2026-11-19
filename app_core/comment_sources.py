@@ -4,6 +4,7 @@ Only real comment identities count. Captions and aggregate counters never do.
 """
 import json
 import logging
+import re
 import time
 
 import aiohttp
@@ -25,8 +26,9 @@ async def fetch_comment_supplements(media_id, token_record, session, known_ids=(
     requests_left = MAX_RECOVERY_REQUESTS
     stopped_status = None
     username = api._get_username(token_record)
+    native_media_id = str(media_id)
 
-    async def fetch(path, params, *, graphql=False):
+    async def fetch(path, params, *, graphql=False, api_root=False):
         nonlocal requests_left
         remaining = RECOVERY_SECONDS - (time.monotonic() - started)
         if requests_left <= 0 or remaining <= 0:
@@ -38,7 +40,8 @@ async def fetch_comment_supplements(media_id, token_record, session, known_ids=(
                                          token_record.get('device_id', ''), username=username)
         headers['Accept-Encoding'] = 'gzip, deflate'
         url = ('https://www.instagram.com/graphql/query/' if graphql else
-               f'https://i.instagram.com/api/v1/media/{media_id}/{path}')
+               ('https://i.instagram.com/api/v1/' + path if api_root else
+                f'https://i.instagram.com/api/v1/media/{media_id}/{path}'))
         if graphql:
             headers['Accept-Encoding'] = 'gzip, deflate'
             headers['Referer'] = 'https://www.instagram.com/'
@@ -94,6 +97,10 @@ async def fetch_comment_supplements(media_id, token_record, session, known_ids=(
         for data in await fetch('info/', {}):
             for media in data.get('items') or []:
                 consume(media)
+                candidate = str(media.get('id') or '')
+                if (re.fullmatch(r'\d+(?:_\d+)?', candidate)
+                        and candidate.split('_')[0] == str(media_id).split('_')[0]):
+                    native_media_id = candidate
                 diagnostics.append(dict(source='media_info', counts={k: len(media.get(k) or [])
                     for k in ('preview_comments', 'hoisted_comments', 'pinned_comments')
                     if isinstance(media.get(k), list)}))
@@ -104,6 +111,30 @@ async def fetch_comment_supplements(media_id, token_record, session, known_ids=(
                         reported_max_comment_count=max(totals) if totals else None,
                         stopped_status=error.status)
 
+    # MediaHiddenCommentNetworkFetcherKt (APK classes9.dex): this is a separate
+    # read-only API root, with next_min_id (NOT the normal min_id cursor).
+    # The server enforces account permissions; no hide/unhide/approve action runs.
+    if totals and len(set(known_ids) | set(records)) < max(totals):
+        params = {'directly_hidden_only': 1}
+        seen = set()
+        hidden_ids = set()
+        try:
+            while True:
+                chunks = await fetch(f'hidden_comments/{native_media_id}/hidden_comments/', params, api_root=True)
+                for data in chunks:
+                    hidden_ids.update(add(data.get('comments', [])))
+                data = chunks[-1]
+                cursor = data.get('next_min_id')
+                if not cursor or str(cursor) in seen:
+                    break
+                seen.add(str(cursor))
+                params = {'directly_hidden_only': 1, 'next_min_id': cursor}
+            diagnostics.append(dict(source='native_hidden_comments', status=200, records=len(hidden_ids)))
+        except Exception as error:
+            diagnostics.append(dict(source='native_hidden_comments', status=getattr(error, 'status', 502)))
+            if getattr(error, 'status', None) in (401, 403, 429):
+                stopped_status = error.status
+
     # NDJSON stream and the legacy, unthreaded list are independent recovery views.
     # Both cursor directions can coexist. Traverse each pending cursor once.
     for path, base_params in (
@@ -112,6 +143,8 @@ async def fetch_comment_supplements(media_id, token_record, session, known_ids=(
                               'is_carousel_bumped_post': 'false', 'feed_position': '1'}),
         ('comments/', {'can_support_threading': 'false', 'permalink_enabled': 'false'}),
     ):
+        if stopped_status:
+            break
         queue = [{}]
         seen = set()
         try:

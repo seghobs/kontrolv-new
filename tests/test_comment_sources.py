@@ -109,10 +109,31 @@ class CommentSourceTests(unittest.TestCase):
         connection = {'edges': [{'node': comment('2')}], 'page_info': {'has_next_page': False}}
         result, session = self.fetch([
             Response({'items': [{'comment_count': 2}]}), Response({'comments': []}),
-            Response({'comments': []}), Response({'data': {'xdt_comments_connection': connection}}),
+            Response({'comments': []}), Response({'comments': []}),
+            Response({'data': {'xdt_comments_connection': connection}}),
         ])
         self.assertEqual(result['comment_ids'], ['2'])
         self.assertEqual(session.requests[-1][1]['doc_id'], '6974885689225067')
+
+    def test_native_hidden_endpoint_uses_full_media_id_and_its_own_cursor(self):
+        result, session = self.fetch([
+            Response({'items': [{'id': '123_99', 'comment_count': 3}]}),
+            Response({'comments': [comment('2')], 'next_min_id': 'hidden-next', 'has_more_headload_comments': True}),
+            Response({'comments': [comment('2'), comment('3')], 'has_more_headload_comments': False}),
+            Response({'comments': []}), Response({'comments': []}),
+        ])
+        self.assertEqual(set(result['comment_ids']), {'2', '3'})
+        self.assertTrue(session.requests[1][0].endswith('/api/v1/hidden_comments/123_99/hidden_comments/'))
+        self.assertEqual(session.requests[1][1], {'directly_hidden_only': 1})
+        self.assertEqual(session.requests[2][1], {'directly_hidden_only': 1, 'next_min_id': 'hidden-next'})
+
+    def test_native_hidden_permission_failure_stops_recovery_without_guessing_authors(self):
+        result, session = self.fetch([
+            Response({'items': [{'comment_count': 2}]}), Response({}, 403),
+        ])
+        self.assertEqual(result['comment_ids'], [])
+        self.assertEqual(result['stopped_status'], 403)
+        self.assertEqual(len(session.requests), 2)
 
 
 if __name__ == '__main__':
