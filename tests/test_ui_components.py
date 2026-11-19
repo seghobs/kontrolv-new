@@ -182,3 +182,19 @@ class SharedUIBrowserTests(unittest.TestCase):
         self.assertTrue(page.locator('#modalCommentCoverage').is_hidden())
         self.assertEqual(page.locator('#modalCommentCoverage').inner_text(),'')
         self.assertEqual(errors,[])
+
+    def test_partial_comments_show_observed_missing_members_without_expanding_card(self):
+        identifier=jobs.enqueue('manual',{});jobs.claim_request(identifier,'partial')
+        jobs.complete(identifier,'partial',{'links':[{
+            'post_link':'https://www.instagram.com/p/Partial/','sender':'owner',
+            'eksikler':[],'commenters':['alice'],'comments_list':[{'username':'alice','text':'hello'}],
+            'audit_exemptions':{'exempt':'Muaf'},'excluded_members':{'joined':'Tarih'},
+            'verification_pending':True,'comment_count':3,'obtained_comment_count':2,'error':'partial'
+        }],'group':['owner','alice','bob','exempt','joined'],'all_commented':['alice']})
+        page,errors=self.page(1440);page.goto('http://ui.test/result/'+identifier,wait_until='domcontentloaded')
+        self.assertTrue(page.locator('#eksiklerSection-1').is_visible())
+        self.assertEqual(page.locator('#eksiklerListesi-1 li').count(),1)
+        self.assertEqual(page.locator('#eksiklerListesi-1 li').get_attribute('data-username'),'bob')
+        self.assertTrue(page.get_by_text('Kesinleşmemiş liste',exact=True).is_visible())
+        page.get_by_text('Eksikler',exact=True).last.click()
+        self.assertFalse(errors,errors)

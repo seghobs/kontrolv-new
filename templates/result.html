@@ -211,16 +211,27 @@
                         {% if item.error %}
                         <div class="alert alert-warning mx-3 mt-3" role="status" style="background:#c4956a15;border:1px solid #c4956a55;color:#eadbcb;border-radius:10px;">
                             {% if item.verification_pending %}
-                            Instagram {{ item.comment_count }} yorum bildiriyor; {{ item.obtained_comment_count }} yorum alınabildi. Yorum yaptığı görülen üyeler aşağıda listeleniyor. Kalan yorumlar alınamadığı için kesin eksik listesi oluşturulmadı.
+                            Instagram {{ item.comment_count }} yorum bildiriyor; {{ item.obtained_comment_count }} yorum alınabildi. Alınan yorumlara göre eksik görünen üyeler aşağıda listeleniyor. Alınamayan yorum bu kişilerden birine ait olabilir; liste henüz kesinleşmedi.
                             {% else %}{{ item.error }}{% endif %}
                         </div>
                         {% endif %}
 
-                        <div id="eksiklerSection-{{ loop.index }}" class="result-section-content collapsed">
+                        <div id="eksiklerSection-{{ loop.index }}" class="result-section-content{% if not item.verification_pending %} collapsed{% endif %}">
                             {% if item.skipped_reason %}
                             <div class="alert" role="status" style="color:var(--accent-caramel);border:1px solid var(--accent-caramel);border-radius:12px;">
                                 {{ item.skipped_reason }} · Bu paylaşım kontrol kapsamına alınmadı; üyelere eksik yazılmadı.
                             </div>
+                            {% elif item.verification_pending %}
+                            {% set observed_missing = pending_missing_users(item, group) %}
+                            <div class="mb-3" style="color:var(--accent-caramel)"><strong>Alınan yorumlara göre eksikler · {{ observed_missing|length }} kişi</strong><br><small>Kesinleşmemiş liste</small></div>
+                            {% if observed_missing %}
+                            <button type="button" class="btn btn-copy-eksikler mb-3" data-index="{{ loop.index }}" onclick="window.copyEksiklerList(this.dataset.index)"><i class="fas fa-copy me-2"></i>Görünen Eksikleri Kopyala</button>
+                            <ul class="list-group list-group-flush eksikler-list" id="eksiklerListesi-{{ loop.index }}" data-post-link="{{ item.post_link }}" data-provisional="true">
+                                {% for username in observed_missing %}
+                                <li class="list-group-item" data-username="{{ username }}"><span class="username-text"><i class="fas fa-user me-2" style="color:var(--accent-caramel)"></i><strong>{{ username }}</strong></span></li>
+                                {% endfor %}
+                            </ul>
+                            {% else %}<p class="mb-0">Alınan yorumlarda tüm kapsam içi üyelerin yorumu bulundu.</p>{% endif %}
                             {% elif item.error %}
                             <div class="alert alert-danger mb-0" style="background: rgba(196, 149, 106, 0.15); border: 1px solid rgba(196, 149, 106, 0.35); color: #f5ede4; padding: 15px; border-radius: 8px;">
                                 <i class="fas fa-exclamation-triangle me-2" style="color: var(--accent-caramel);"></i>{{ item.error }}

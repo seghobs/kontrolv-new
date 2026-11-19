@@ -28,6 +28,23 @@ logger = logging.getLogger(__name__)
 main_bp = Blueprint("main", __name__)
 
 
+def pending_missing_users(post, members):
+    """Display observed absences separately from the verified missing list."""
+    known = {normalize_username(u) for u in post.get('commenters') or []}
+    for comment in post.get('comments_list') or []:
+        name = comment.get('username') if isinstance(comment, dict) else comment[0]
+        known.add(normalize_username(name))
+    exempt = set(post.get('audit_exemptions') or {}) | set(post.get('excluded_members') or {})
+    exempt.add(post.get('sender') or '')
+    return sorted({normalize_username(u) for u in members or []}
+                  - known - {normalize_username(u) for u in exempt} - {''})
+
+
+@main_bp.app_context_processor
+def comment_coverage_helpers():
+    return {'pending_missing_users': pending_missing_users}
+
+
 class ControlUnavailable(ValueError):
     pass
 
