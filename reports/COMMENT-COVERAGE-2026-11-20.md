@@ -33,6 +33,13 @@ istenen **tüm yorumlara göre kesin eksik listesi** için yeterli değildir.
 
 ## Doğrulama
 
+Son sürümde 298 testin tamamı geçti. Canlı dosyalar GitHub'a gönderilen dosyalarla
+bayt düzeyinde karşılaştırıldı; PythonAnywhere uygulaması yeniden yüklendi.
+Son canlı yeniden denetim yaklaşık 21 saniyede tamamlandı: Instagram 86 yorum
+bildiriyor, 85 gerçek yorum alınabiliyor. Tarama sırasında yeni yorum geldiği
+için önceki 85/84 sayıları yükselmiş olsa da bir yorumluk fark sürüyor. Rapor
+`verification_pending=true` ve boş kesin eksik listesiyle kaydedildi.
+
 Kimlik birleştirme, ayrı yorumlarındaki aynı metin, NDJSON parçaları, iki cursor,
 çocuk yanıtları, hoisted kayıtlar, caption/anonim kayıt reddi, döngü sonlandırma,
 rate limitte durma, aktif ek hesap, sayaç düşürmeme ve arayüz kapsam açıklaması
