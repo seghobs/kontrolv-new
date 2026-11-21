@@ -57,7 +57,9 @@ class FakeClient:
     def authorization_data(self,value):self.settings['authorization_data']=value
     def parse_authorization(self,token):return json.loads(base64.b64decode(token.removeprefix('Bearer IGT:2:')))
     def get_settings(self):return copy.deepcopy(self.settings)
-    def set_settings(self,settings):self.settings=copy.deepcopy(settings)
+    def set_settings(self,settings):
+        self.settings=copy.deepcopy(settings)
+        self.private.cookies=requests.utils.cookiejar_from_dict(settings.get('cookies',{}))
     def set_uuids(self,ids):self.settings['uuids']=copy.deepcopy(ids)
     def set_device(self,device,**kwargs):self.settings['device_settings'].update(device)
     def set_user_agent(self,value):self.settings['user_agent']=value
@@ -235,6 +237,23 @@ class LumaLoginTests(unittest.TestCase):
         self.assertEqual(flow['stage'],'done');self.clients[-1].bloks_caa_login.assert_not_called()
         second=self.read_profile()['settings']['uuids']
         self.assertEqual(first['uuid'],second['uuid']);self.assertNotEqual(first['request_id'],second['request_id'])
+
+    def test_password_alone_reauthenticates_instead_of_reusing_expired_auth(self):
+        login.start('alice','pw',owner='browser')
+        ids=self.read_profile()['settings']['uuids']
+        observed=[]
+        client=FakeClient()
+        def sign(**kwargs):
+            observed.append((client.user_id,client.private.cookies.get('sessionid')))
+            return client.sign(**kwargs)
+        client.bloks_caa_login=Mock(side_effect=sign)
+        with patch.object(login,'make_client',return_value=client):
+            flow=login.start('alice','new-password',owner='browser')
+        self.assertEqual(flow['stage'],'done');self.assertEqual(observed,[(None,None)])
+        self.assertEqual(client.uuid,ids['uuid'])
+        self.assertEqual(client.android_device_id,ids['android_device_id'])
+        self.assertEqual(client.phone_id,ids['phone_id'])
+        self.assertNotIn('new-password',json.dumps(self.read_profile()))
 
     def test_explicit_fresh_login_preserves_device(self):
         login.start('alice','pw',owner='browser');before=self.read_profile()['settings']['uuids']['uuid']

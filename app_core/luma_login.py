@@ -88,7 +88,7 @@ def _message(error):
     if kind in ('BadPassword','InvalidUser','BadCredentials'):
         return 'Kullanıcı adı veya parola hatalı.'
     if kind in ('LoginRequired','ClientUnauthorizedError'):
-        return 'Kayıtlı oturumun süresi dolmuş. Parolanızı girip “Parola ile yeniden giriş yap” seçeneğini açın.'
+        return 'Kayıtlı oturumun süresi dolmuş. Parolanızı girerek yeniden deneyin; kayıtlı cihazınız korunur.'
     if kind in ('TwoFactorRequired','ChallengeRequired','ChallengeError','SelectContactPointRecoveryForm'):
         return 'Instagram ek doğrulama istedi; sunucunun açtığı doğrulama adımlarıyla devam edin veya resmî uygulamadan hesabı kontrol edin.'
     if 'Timeout' in kind or 'Connection' in kind:
@@ -235,7 +235,9 @@ def start(username, password='', *, owner, fresh=False, profile_name='pixel8', c
             from app_core.device_profiles import new_identity
             client.set_uuids(new_identity())
             apply_profile(client, device_profile(profile_name, custom_profile))
-        if fresh or new_device:
+        # An explicitly supplied password requests a new login. Never ignore it
+        # just because the browser did not also check the advanced fresh option.
+        if fresh or new_device or password:
             settings = client.get_settings()
             settings.update(authorization_data={},cookies={},last_login=None)
             client.set_settings(settings)
