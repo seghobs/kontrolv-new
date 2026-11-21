@@ -218,7 +218,7 @@ class SharedUIBrowserTests(unittest.TestCase):
         page.locator('#showMethods').click();page.get_by_role('button',name='WhatsApp',exact=True).click()
         page.locator('#verificationCode').fill('123456');page.locator('#verifyForm button').click()
         page.locator('#successMessage').wait_for(state='visible')
-        self.assertEqual(len(starts),1);self.assertEqual(starts[0]['profile'],'pixel8')
+        self.assertEqual(len(starts),1);self.assertEqual(starts[0]['profile'],'saved')
         self.assertTrue(all('password' not in data for data in steps))
         self.assertEqual(page.locator('#verificationCode').input_value(),'')
         self.assertTrue(page.evaluate('document.documentElement.scrollWidth<=innerWidth'))

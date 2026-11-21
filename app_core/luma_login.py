@@ -196,7 +196,7 @@ def _methods(flow, client):
     flow.update(stage='method', methods=offered, message='Instagram’ın sunduğu doğrulama yöntemini seçin.')
 
 
-def start(username, password='', *, owner, fresh=False, profile_name='pixel8', custom_profile=None, new_device=False):
+def start(username, password='', *, owner, fresh=False, profile_name='saved', custom_profile=None, new_device=False):
     if not isinstance(username,str):raise LoginFailure('Kullanıcı adı geçersiz.')
     username = username.strip().lstrip('@').lower()
     if not re.fullmatch(r'[a-z0-9._]{1,30}',username) or not isinstance(password,str) or len(password)>1024:
@@ -211,6 +211,19 @@ def start(username, password='', *, owner, fresh=False, profile_name='pixel8', c
             active = _get(conn,'luma-flow:' + saved.get('flow_id',''))
             if active and active['expires']>time.time() and active['stage'] not in ('done','failed','cancelled'):
                 raise LoginFailure('Bu hesap için devam eden giriş var; mevcut işlemi tamamlayın veya iptal edin.',409)
+        selected = device_profile('pixel8' if profile_name == 'saved' else profile_name, custom_profile)
+        saved_settings = saved.get('settings') or {}
+        if profile_name == 'saved' and saved_settings:
+            selected = {key:copy.deepcopy(saved_settings[key]) for key in
+                ('device_settings','user_agent','locale','country','country_code','timezone_offset','device_status')
+                if saved_settings.get(key) is not None}
+        if saved_settings and profile_name != 'saved':
+            selected_model = selected.get('device_settings',{}).get('model')
+            saved_model = saved_settings.get('device_settings',{}).get('model')
+            if profile_name == 'custom' or selected_model != saved_model:
+                new_device = True
+        if new_device and not password:
+            raise LoginFailure('Seçtiğiniz cihazla giriş yapmak için parolanızı girin. Kayıtlı oturum değiştirilmedi.')
         settings = saved.get('settings') if not new_device else None
         creating_device = not bool(settings)
         if settings:
@@ -234,7 +247,7 @@ def start(username, password='', *, owner, fresh=False, profile_name='pixel8', c
         else:
             from app_core.device_profiles import new_identity
             client.set_uuids(new_identity())
-            apply_profile(client, device_profile(profile_name, custom_profile))
+            apply_profile(client, selected)
         # An explicitly supplied password requests a new login. Never ignore it
         # just because the browser did not also check the advanced fresh option.
         if fresh or new_device or password:

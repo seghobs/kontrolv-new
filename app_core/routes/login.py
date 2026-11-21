@@ -53,7 +53,7 @@ def start():
         raise engine.LoginFailure('Giriş seçenekleri geçersiz.')
     try:
         flow=engine.start(data.get('username',''),data.get('password',''),owner=owner(),
-            fresh=data.get('fresh',False),profile_name=data.get('profile','pixel8'),
+            fresh=data.get('fresh',False),profile_name=data.get('profile','saved'),
             custom_profile=data.get('custom_profile'),new_device=data.get('new_device',False))
     except engine.LoginFailure:raise
     except (ValueError,TypeError):raise engine.LoginFailure('Cihaz profili veya giriş bilgisi geçersiz.')

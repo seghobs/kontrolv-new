@@ -217,14 +217,38 @@ class LumaLoginTests(unittest.TestCase):
                 custom_profile={'uuids':{'uuid':ids['uuid']}})
         self.assertIsNone(self.read_profile('bob'))
 
-    def test_existing_device_keeps_all_persistent_ids_when_another_preset_is_selected(self):
+    def test_saved_option_preserves_device_and_ids(self):
         login.start('alice','pw',owner='browser',profile_name='s24')
         before=self.read_profile()['settings']['uuids']
-        flow=login.start('alice',owner='browser',profile_name='pixel9')
+        flow=login.start('alice',owner='browser',profile_name='saved')
         self.assertEqual(flow['device'],'SM-S921B')
         after=self.read_profile()['settings']['uuids']
         for key in ('uuid','android_device_id','phone_id','advertising_id','tray_session_id'):
             self.assertEqual(before[key],after[key])
+
+    def test_selecting_different_model_applies_it_without_extra_checkbox(self):
+        login.start('alice','pw',owner='browser')
+        before=self.read_profile()['settings']['uuids']
+        flow=login.start('alice','pw',owner='browser',profile_name='s24ultra')
+        self.assertEqual(flow['stage'],'done');self.assertEqual(flow['device'],'SM-S928B')
+        after=self.read_profile()['settings']['uuids']
+        for key in before:self.assertNotEqual(before[key],after[key])
+        flow=login.start('alice',owner='browser',profile_name='s24ultra')
+        self.assertEqual(flow['stage'],'done');self.assertEqual(self.read_profile()['settings']['uuids']['uuid'],after['uuid'])
+
+    def test_different_model_without_password_preserves_existing_profile(self):
+        login.start('alice','pw',owner='browser')
+        before=self.read_profile()
+        with self.assertRaises(login.LoginFailure):
+            login.start('alice',owner='browser',profile_name='s24ultra')
+        self.assertEqual(self.read_profile(),before)
+
+    def test_recreating_saved_device_preserves_model_with_new_ids(self):
+        login.start('alice','pw',owner='browser',profile_name='s24ultra')
+        before=self.read_profile()['settings']['uuids']['uuid']
+        flow=login.start('alice','pw',owner='browser',new_device=True)
+        self.assertEqual(flow['device'],'SM-S928B')
+        self.assertNotEqual(before,self.read_profile()['settings']['uuids']['uuid'])
 
     def test_each_account_has_distinct_persistent_device(self):
         login.start('alice','pw',owner='browser');login.start('bob','pw',owner='browser')
