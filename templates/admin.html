@@ -55,6 +55,7 @@
                 </div>
             </div>
             <nav class="header-navigation" aria-label="Sayfa gezinme"><a class="logout-btn" href="/group-rules">Grup kuralları</a><a class="logout-btn" href="/backups">Yedekler</a><a class="logout-btn" href="/trash">Çöp kutusu</a>
+                <a href="/instagram-login" class="logout-btn"><i class="fas fa-user-plus" aria-hidden="true"></i> Instagram Girişi</a>
                 <a href="{{ url_for('history.index') }}" class="logout-btn">Denetim Geçmişi</a>
                 <a href="{{ url_for('main.index') }}" class="logout-btn"><i class="fas fa-home" aria-hidden="true"></i> Ana Sayfa</a>
                 <a href="/admin/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Çıkış Yap</a>
@@ -107,6 +108,13 @@
         <div id="alertContainer"></div>
         {% include '_gemini_settings.html' %}
         
+        <div class="add-token-section">
+            <div class="section-header"><h2><i class="fas fa-user-plus"></i> Instagram Hesabı Ekle</h2></div>
+            <div class="section-body">
+                <p>Kullanıcı adı ve parolanızla giriş yapın. Gerekirse Instagram onayını veya doğrulama kodunu aynı ekranda tamamlayın.</p>
+                <a href="/instagram-login" class="btn auto-btn-save">Yeni hesapla giriş yap</a>
+            </div>
+        </div>
         <div class="add-token-section" id="addTokenSection">
             <div class="section-header" id="addTokenHeader" onclick="toggleAddTokenPanel()" style="cursor: pointer;">
                 <h2><i class="fas fa-plus-circle"></i> Yeni Token Ekle</h2>
@@ -706,7 +714,7 @@
         </a>
         <a href="/token_al" class="nav-item">
             <i class="fas fa-key"></i>
-            <span>Token Al</span>
+            <span>Hesap Ekle</span>
         </a>
         <a href="/admin" class="nav-item active">
             <i class="fas fa-user-shield"></i>

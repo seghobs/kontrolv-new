@@ -19,7 +19,8 @@ class LoginAPITests(unittest.TestCase):
 
     def test_login_api_requires_admin_and_token_page_redirects(self):
         self.assertEqual(self.client.post('/api/luma-login/start',json={'username':'alice'}).status_code,401)
-        self.assertEqual(self.client.get('/token_al').location,'/admin/login')
+        self.assertEqual(self.client.get('/token_al').location,'/admin/login?next=/instagram-login')
+        self.assertEqual(self.client.get('/instagram-login').location,'/admin/login?next=/instagram-login')
 
     def test_even_when_global_csrf_is_disabled_login_requires_csrf(self):
         self.authorize()

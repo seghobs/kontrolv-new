@@ -91,6 +91,8 @@ def login():
             clear_attempts(key)
             session["admin_logged_in"] = True
             logger.info("Admin girisi basarili.")
+            if request.args.get('next') in ('/instagram-login', '/token_al'):
+                return redirect('/instagram-login')
             return redirect(url_for("admin.panel"))
         logger.warning("Hatali admin giris denemesi.")
         return render_template("admin_login.html", error=True)

@@ -925,10 +925,11 @@ def add_exemption():
         return jsonify({"success": False, "message": f"Hata: {error}"}), 500
 
 
+@main_bp.route("/instagram-login")
 @main_bp.route("/token_al")
 def token_page():
     if not session.get('admin_logged_in'):
-        return redirect('/admin/login')
+        return redirect('/admin/login?next=/instagram-login')
     return render_template("token.html")
 
 
