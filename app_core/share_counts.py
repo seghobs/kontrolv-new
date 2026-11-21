@@ -28,11 +28,14 @@ def count_member_shares(messages, users, min_ts, max_ts, posts=()):
             else:
                 attachments = msg.get('xma_media_share') or []
                 if isinstance(attachments, dict): attachments=[attachments]
+                if not isinstance(attachments, list): attachments=[]
                 texts = [a.get('target_url','') for a in attachments if isinstance(a,dict)]
                 if kind in ('text','link'):
-                    texts += [msg.get('text') or '', (msg.get('link') or {}).get('text','')]
+                    link = msg.get('link')
+                    texts += [msg.get('text') or '', link.get('text','') if isinstance(link, dict) else '']
                 links = set()
                 for text in texts:
+                    if not isinstance(text, str): continue
                     for typ,code in re.findall(r'instagram\.com/(p|reels?|tv|stories)/([\w.-]+)',text):
                         links.add((typ,code))
                 counts = [('story' if typ=='stories' else 'reels' if typ in ('reel','reels','tv') else kinds.get(code,'post')) for typ,code in links]

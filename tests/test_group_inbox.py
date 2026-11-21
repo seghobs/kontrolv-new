@@ -1,6 +1,5 @@
 import unittest
 from unittest.mock import Mock, patch
-import requests
 from app_core import instagram_api as api
 
 
@@ -39,3 +38,15 @@ class GroupInboxTests(unittest.TestCase):
         result=self.fetch({'inbox':{'threads':[None, {'thread_title':'No members','users':None},
             {'thread_id':'1','users':[None,{'username':'a'},{'username':'b'}], 'thread_image':None}]}})
         self.assertTrue(result['ok']);self.assertEqual(len(result['groups']),1)
+
+    def test_missing_members_cannot_be_reported_as_an_empty_success(self):
+        for thread in (None, {'users':None}, {'users':[None]}):
+            with patch.object(api,'_get_http_session') as http, \
+                    patch.object(api,'build_auth_headers',return_value={}), \
+                    patch.object(api,'current_token',return_value='fake'), \
+                    patch.object(api,'_update_session_from_response'):
+                response=Mock(status_code=200);response.json.return_value={'thread':thread}
+                http.return_value.get.return_value=response
+                result=api.fetch_group_members(dict(username='fake',token='fake',
+                    user_agent='fake',android_id_yeni='fake',device_id='fake'),'1')
+            self.assertFalse(result['ok']);self.assertNotIn('NoneType',result['error'])

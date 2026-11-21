@@ -723,6 +723,28 @@ def fetch_liker_usernames(media_id, token_record, progress_callback=None):
     return {"ok": True, "status": 200, "usernames": usernames}
 
 
+def _object(value):
+    return value if isinstance(value, dict) else {}
+
+
+def _records(value):
+    return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+
+def _thumbnail(media):
+    media = _object(media)
+    candidates = _records(_object(media.get('image_versions2')).get('candidates'))
+    urls = [c['url'] for c in candidates if isinstance(c.get('url'), str) and c['url']]
+    if urls:
+        return urls[-1]
+    for child in _records(media.get('carousel_media')):
+        urls = [c['url'] for c in _records(_object(child.get('image_versions2')).get('candidates'))
+                if isinstance(c.get('url'), str) and c['url']]
+        if urls:
+            return urls[-1]
+    return None
+
+
 def fetch_group_threads(token_record):
     username = _get_username(token_record)
     token = current_token(username, token_record.get("token", ""))
@@ -735,13 +757,9 @@ def fetch_group_threads(token_record):
     
     headers = build_auth_headers(token, user_agent, android_id, device_id, username=username)
     headers.update({
-        "x-ig-app-locale": "tr_TR",
-        "x-ig-device-locale": "tr_TR",
-        "x-ig-mapped-locale": "tr_TR",
         "x-ig-capabilities": "3brTv10=",
         "x-ig-connection-type": "WIFI",
         "x-fb-connection-type": "WIFI",
-        "accept-language": "tr-TR, en-US",
     })
     
     try:
@@ -767,7 +785,7 @@ def fetch_group_threads(token_record):
                 continue
             thread_id = thread.get("thread_id")
             thread_title = thread.get("thread_title", "")
-            users = [u for u in (thread.get('users') or []) if isinstance(u, dict)]
+            users = _records(thread.get('users'))
             
             if thread_title:
                 group_name = thread_title.encode('utf-8', errors='replace').decode('utf-8')
@@ -831,13 +849,9 @@ def fetch_group_members(token_record, thread_id):
     
     headers = build_auth_headers(token, user_agent, android_id, device_id, username=username)
     headers.update({
-        "x-ig-app-locale": "tr_TR",
-        "x-ig-device-locale": "tr_TR",
-        "x-ig-mapped-locale": "tr_TR",
         "x-ig-capabilities": "3brTv10=",
         "x-ig-connection-type": "WIFI",
         "x-fb-connection-type": "WIFI",
-        "accept-language": "tr-TR, en-US",
     })
     
     try:
@@ -851,9 +865,14 @@ def fetch_group_members(token_record, thread_id):
             return {"ok": False, "error": f"HTTP {response.status_code}", "invalid_session": response_has_invalid_session(response)}
         
         data = response.json()
-        thread = data.get("thread", {})
-        users = thread.get("users", [])
-        admin_user_ids = set(str(uid) for uid in thread.get("admin_user_ids", []))
+        thread = _object(data).get('thread')
+        if not isinstance(thread, dict) or not isinstance(thread.get('users'), list):
+            return {"ok": False, "error": "Instagram grup üyelerini döndürmedi.",
+                    "invalid_session": response_has_invalid_session(response)}
+        users = thread['users']
+        if any(not isinstance(user, dict) for user in users):
+            return {"ok": False, "error": "Instagram grup üye listesini eksik döndürdü."}
+        admin_user_ids = set(str(uid) for uid in (thread.get('admin_user_ids') or []))
         
         usernames = []
         members = []
@@ -910,19 +929,22 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
     
     headers = build_auth_headers(token, user_agent, android_id, device_id, username=username)
     headers.update({
-        "x-ig-app-locale": "tr_TR",
-        "x-ig-device-locale": "tr_TR",
-        "x-ig-mapped-locale": "tr_TR",
         "x-ig-capabilities": "3brTv10=",
         "x-ig-connection-type": "WIFI",
         "x-fb-connection-type": "WIFI",
-        "accept-language": "tr-TR, en-US",
         "ig-intended-user-id": user_id,
         "ig-u-ds-user-id": user_id,
         "priority": "u=3",
         "x-fb-friendly-name": "IgApi: direct_v2_threads_media",
     })
     
+    def get(url, **kwargs):
+        # Every page uses response-rotated auth/cookies and the login locale.
+        fresh = build_auth_headers(token, user_agent, android_id, device_id, username=username)
+        fresh.update({'priority': 'u=3', 'x-fb-friendly-name': 'IgApi: direct_v2_threads_media'})
+        kwargs['headers'] = fresh
+        return _get_http_session(username).get(url, **kwargs)
+
     target_start = target_date.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=gmt3)
     target_end = target_date.replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=gmt3)
     
@@ -933,22 +955,23 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
     thread_users_map = {}
     try:
         try:
-            t_resp = _get_http_session(username).get(
+            t_resp = get(
                 f"https://i.instagram.com/api/v1/direct_v2/threads/{thread_id}/",
                 headers=headers,
                 timeout=10,
             )
+            _update_session_from_response(username, t_resp)
             if t_resp.status_code == 200:
                 t_data = t_resp.json()
-                for u in t_data.get("thread", {}).get("users", []):
+                for u in _records(_object(_object(t_data).get("thread")).get("users")):
                     thread_users_map[str(u.get("pk", ""))] = u.get("username", "")
-                inviter = t_data.get("thread", {}).get("inviter", {})
+                inviter = _object(_object(_object(t_data).get("thread")).get("inviter"))
                 if inviter:
                     thread_users_map[str(inviter.get("pk", ""))] = inviter.get("username", "")
         except Exception:
             pass
 
-        response = _get_http_session(username).get(
+        response = get(
             f"https://i.instagram.com/api/v1/direct_v2/threads/{thread_id}/media/",
             params={
                 "max_timestamp": max_ts,
@@ -963,7 +986,10 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
             return {"ok": False, "error": f"HTTP {response.status_code}", "invalid_session": response_has_invalid_session(response)}
         
         data = response.json()
-        items = data.get("items", [])
+        if not isinstance(data, dict) or data.get('status') == 'fail' or not isinstance(data.get('items'), list):
+            return {"ok": False, "error": "Instagram paylaşım listesini döndürmedi.",
+                    "invalid_session": response_has_invalid_session(response)}
+        items = list(data['items'])
         
         if complete:
             if data.get('status') == 'fail' or not isinstance(data.get('items'), list):
@@ -973,53 +999,57 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
             # Continue through the selected day; never report a truncated day as complete.
             for page in range(40):
                 if time.monotonic()-pagination_started > 110: raise ValueError('Günün tamamı istek süresi içinde alınamadı.')
-                stamps = [int(i.get('timestamp',0)) for i in data.get('items',[])]
+                stamps = [int(i.get('timestamp') or 0) for i in _records(data.get('items'))]
                 if not stamps or min(stamps) <= min_ts or (len(stamps) < 50 and not data.get('has_more')):
                     break
                 next_ts = min(stamps) - 1
-                response = _get_http_session(username).get(
+                response = get(
                     f"https://i.instagram.com/api/v1/direct_v2/threads/{thread_id}/media/",
                     params={'max_timestamp':next_ts,'limit':'50','media_type':'media_shares'},headers=headers,timeout=15)
                 if response.status_code != 200: raise ValueError('Günün tüm paylaşımları alınamadı.')
+                _update_session_from_response(username, response)
                 data=response.json()
-                if data.get('status') == 'fail' or not isinstance(data.get('items'),list): raise ValueError('Paylaşım sayfası doğrulanamadı.')
+                if not isinstance(data, dict) or data.get('status') == 'fail' or not isinstance(data.get('items'),list): raise ValueError('Paylaşım sayfası doğrulanamadı.')
                 newer=data.get('items',[])
-                if newer and min(int(i.get('timestamp',0)) for i in newer) >= next_ts+1:
+                if newer and (not _records(newer) or min(int(i.get('timestamp') or 0) for i in _records(newer)) >= next_ts+1):
                     raise ValueError('Paylaşım sayfalaması ilerlemedi.')
                 items.extend(newer)
             else: raise ValueError('Günlük paylaşım sınırına ulaşıldı; tam liste doğrulanamadı.')
-            if not t_data or not isinstance(t_data.get('thread'),dict): raise ValueError('Grup mesajları alınamadı.')
+            if not isinstance(_object(t_data).get('thread'),dict): raise ValueError('Grup mesajları alınamadı.')
             thread=t_data.get('thread',{})
-            all_messages=list(thread.get('items',[]))
+            if not isinstance(thread.get('items'), list): raise ValueError('Grup mesaj listesi doğrulanamadı.')
+            all_messages=list(thread['items'])
             seen_cursors=set()
             for page in range(40):
                 if time.monotonic()-pagination_started > 110: raise ValueError('Günün tamamı istek süresi içinde alınamadı.')
-                stamps=[int(i.get('timestamp',0)) for i in thread.get('items',[])]
+                stamps=[int(i.get('timestamp') or 0) for i in _records(thread.get('items'))]
                 if (stamps and min(stamps)<=min_ts-30*60*1000000) or not thread.get('has_older'): break
                 cursor=thread.get('oldest_cursor')
                 if not cursor or cursor in seen_cursors: raise ValueError('Grup mesajlarının tamamı alınamadı.')
                 seen_cursors.add(cursor)
-                response=_get_http_session(username).get(f"https://i.instagram.com/api/v1/direct_v2/threads/{thread_id}/",
+                response=get(f"https://i.instagram.com/api/v1/direct_v2/threads/{thread_id}/",
                     params={'cursor':cursor,'direction':'older'},headers=headers,timeout=15)
                 if response.status_code!=200: raise ValueError('Grup mesaj sayfası alınamadı.')
-                thread=response.json().get('thread')
+                _update_session_from_response(username, response)
+                thread=_object(response.json()).get('thread')
                 if not isinstance(thread,dict): raise ValueError('Mesaj sayfası doğrulanamadı.')
-                all_messages.extend(thread.get('items',[]))
-                for member in thread.get('users', []):
+                if not isinstance(thread.get('items'), list): raise ValueError('Mesaj sayfası doğrulanamadı.')
+                all_messages.extend(thread['items'])
+                for member in _records(thread.get('users')):
                     thread_users_map[str(member.get('pk', ''))] = member.get('username', '')
             else: raise ValueError('Mesaj sınırına ulaşıldı; tam liste doğrulanamadı.')
             t_data['thread']['items']=all_messages
 
         # Direct media galleries can omit Reels delivered as clip/media_share messages.
         # Merge those attachments from the fully paginated conversation, excluding stories.
-        thread_messages = ((t_data or {}).get('thread') or {}).get('items') or []
+        thread_messages = _records(_object(_object(t_data).get('thread')).get('items'))
         story_count = 0
         known_codes = {i['media'].get('code') for i in items
                        if isinstance(i, dict) and isinstance(i.get('media'), dict)}
         for message in thread_messages:
             if not isinstance(message, dict):
                 continue
-            stamp = message.get('timestamp') or 0
+            stamp = int(message.get('timestamp') or 0)
             if not min_ts <= stamp <= max_ts:
                 continue
             if message.get('item_type') in ('reel_share', 'story_share', 'story_reply', 'xma_story_share'):
@@ -1054,7 +1084,7 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
                     try:
                         if complete and time.monotonic() - pagination_started > 100:
                             raise TimeoutError('Metadata budget exhausted')
-                        info = _get_http_session(username).get(
+                        info = get(
                             f'https://i.instagram.com/api/v1/media/{media_id}/info/', headers=headers, timeout=10)
                         _update_session_from_response(username, info)
                         details = info.json().get('items') if info.status_code == 200 else None
@@ -1110,7 +1140,7 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
             
             sender_pk = str(item.get("user_id", "") or item.get("sender_id", ""))
             post_owner_pk = str((media.get("user") or {}).get("pk", "") or (media.get("user") or {}).get("id", ""))
-            post_owner_username = (media.get("user") or {}).get("username", "") or (item.get("media_share") or {}).get("user", {}).get("username", "")
+            post_owner_username = (media.get("user") or {}).get("username", "") or _object(_object(item.get("media_share")).get("user")).get("username", "")
             
             final_sender = post_owner_username
             
@@ -1120,7 +1150,7 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
                     final_sender = thread_users_map[sender_pk]
                 else:
                     # Eger thread icinde user objesi olarak gelmisse (nadir)
-                    alt_user = (item.get("user") or {}).get("username", "")
+                    alt_user = _object(item.get("user")).get("username", "")
                     if alt_user:
                         final_sender = alt_user
             
@@ -1142,17 +1172,9 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
                     is_recent = True
 
             # Thumbnail URL cikar
-            thumbnail_url = None
-            image_versions = media.get("image_versions2", {}).get("candidates", [])
-            if image_versions:
-                thumbnail_url = image_versions[-1].get("url") or image_versions[0].get("url")
-            elif media.get("carousel_media"):
-                first_c = media.get("carousel_media")[0]
-                c_versions = first_c.get("image_versions2", {}).get("candidates", [])
-                if c_versions:
-                    thumbnail_url = c_versions[-1].get("url") or c_versions[0].get("url")
+            thumbnail_url = _thumbnail(media)
 
-            user_profile_pic_url = (media.get("user") or {}).get("profile_pic_url") or (item.get("user") or {}).get("profile_pic_url") or ""
+            user_profile_pic_url = (media.get("user") or {}).get("profile_pic_url") or _object(item.get("user")).get("profile_pic_url") or ""
 
             posts.append({
                 "id": media.get("id"),
@@ -1175,7 +1197,7 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
         if t_data:
             text_posts = []
             try:
-                items = t_data.get("thread", {}).get("items", [])
+                items = _records(_object(_object(t_data).get("thread")).get("items"))
                 for item in items:
                     if not isinstance(item, dict) or item.get("item_type") in ("reel_share", "story_share", "story_reply", "xma_story_share"):
                         continue
@@ -1188,7 +1210,7 @@ def fetch_group_media(token_record, thread_id, target_date=None, complete=False)
                     
                     text = item.get("text", "") or ""
                     if item.get("link"):
-                        text += " " + str(item.get("link", {}).get("text", ""))
+                        text += " " + str(_object(item.get("link")).get("text", ""))
                         
                     import re
                     matches = re.findall(r"instagram\.com/(?:share/)?(p|reels?|tv)/([a-zA-Z0-9\-_]+)", text)

@@ -136,6 +136,62 @@ class LumaLoginTests(unittest.TestCase):
         self.assertEqual(request.headers['x-ig-family-device-id'],self.clients[-1].phone_id)
         self.assertEqual(request.headers['ig-intended-user-id'],'123')
 
+    def test_new_login_reads_groups_members_and_posts_with_its_saved_session(self):
+        from app_core import instagram_api as api
+        from datetime import datetime, timezone, timedelta
+        login.start('alice','pw',owner='browser')
+        record=storage.load_tokens()[0]
+        now=datetime.now(timezone(timedelta(hours=3)))
+        stamp=int(now.timestamp()*1000000)
+        users=[{'pk':'123','username':'alice'},{'pk':'456','username':'bob'}]
+        messages=[{'timestamp':stamp,'item_id':'msg1','user_id':'456','item_type':'xma_media_share',
+                   'xma_media_share':[{'target_url':None}]}]
+        thread={'thread_id':'789','thread_title':'Synthetic group','users':users,'items':messages,
+                'thread_image':None,'admin_user_ids':None,'has_older':False}
+        captured=[]
+        def transport(session,request,**kwargs):
+            captured.append(request)
+            self.assertEqual(request.method,'GET')
+            self.assertEqual(request.headers['authorization'],record['token'])
+            self.assertIn('sessionid=fake-session',request.headers['Cookie'])
+            self.assertEqual(request.headers['x-ig-device-id'],record['device_id'])
+            if '/inbox/' in request.url:data={'inbox':{'threads':[thread]}}
+            elif '/media/' in request.url:data={'items':[{'timestamp':stamp,'media':{'code':'TEST',
+                'user':None,'image_versions2':None,'carousel_media':[None,{'image_versions2':None}]},
+                'media_share':{'user':None},'user':None}]}
+            else:data={'thread':thread}
+            response=requests.Response();response.status_code=200;response.request=request
+            response._content=json.dumps(data).encode();return response
+        with patch('requests.sessions.Session.send',new=transport):
+            groups=api.fetch_group_threads(record)
+            members=api.fetch_group_members(record,'789')
+            posts=api.fetch_group_media(record,'789',now,complete=True)
+        self.assertTrue(groups['ok'],groups);self.assertEqual(len(groups['groups']),1)
+        self.assertTrue(members['ok'],members);self.assertEqual(members['usernames'],['alice','bob'])
+        self.assertTrue(posts['ok'],posts);self.assertEqual(posts['posts'][0]['code'],'TEST')
+        self.assertIsNone(posts['posts'][0]['thumbnail_url']);self.assertEqual(len(captured),4)
+
+    def test_media_read_uses_session_rotated_by_preceding_thread_response(self):
+        from app_core import instagram_api as api
+        login.start('alice','pw',owner='browser')
+        record=storage.load_tokens()[0]
+        new_auth='Bearer IGT:2:'+base64.b64encode(json.dumps({'ds_user_id':'123','sessionid':'rotated'}).encode()).decode()
+        calls=[]
+        def transport(session,request,**kwargs):
+            calls.append(request)
+            response=requests.Response();response.status_code=200;response.request=request
+            if len(calls)==1:
+                response.headers['ig-set-authorization']=new_auth
+                data={'thread':{'items':[],'users':None,'inviter':None,'has_older':False}}
+            else:
+                self.assertEqual(request.headers['authorization'],new_auth)
+                self.assertIn('sessionid=rotated',request.headers['Cookie'])
+                data={'items':[]}
+            response._content=json.dumps(data).encode();return response
+        with patch('requests.sessions.Session.send',new=transport):
+            result=api.fetch_group_media(record,'789',complete=True)
+        self.assertTrue(result['ok'],result);self.assertEqual(len(calls),2)
+
     def test_each_account_has_distinct_persistent_device(self):
         login.start('alice','pw',owner='browser');login.start('bob','pw',owner='browser')
         a=self.read_profile('alice')['settings']['uuids'];b=self.read_profile('bob')['settings']['uuids']
