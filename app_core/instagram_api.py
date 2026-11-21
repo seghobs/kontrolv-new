@@ -755,13 +755,19 @@ def fetch_group_threads(token_record):
             return {"ok": False, "error": f"HTTP {response.status_code}", "invalid_session": response_has_invalid_session(response)}
         
         data = response.json()
-        threads = data.get("inbox", {}).get("threads", [])
+        inbox = data.get('inbox') if isinstance(data, dict) else None
+        if not isinstance(inbox, dict) or not isinstance(inbox.get('threads'), list):
+            return {"ok": False, "error": "Instagram sohbet listesini döndürmedi.",
+                    "invalid_session": response_has_invalid_session(response)}
+        threads = inbox['threads']
         
         groups = []
         for thread in threads:
+            if not isinstance(thread, dict):
+                continue
             thread_id = thread.get("thread_id")
             thread_title = thread.get("thread_title", "")
-            users = thread.get("users", [])
+            users = [u for u in (thread.get('users') or []) if isinstance(u, dict)]
             
             if thread_title:
                 group_name = thread_title.encode('utf-8', errors='replace').decode('utf-8')
@@ -771,13 +777,16 @@ def fetch_group_threads(token_record):
             
             # Group thumbnail extraction
             group_pic_url = None
-            if thread.get("image_versions2", {}).get("candidates"):
-                cands = thread["image_versions2"]["candidates"]
-                group_pic_url = cands[-1].get("url") or cands[0].get("url")
-            elif thread.get("thread_image", {}).get("image_versions2", {}).get("candidates"):
-                cands = thread["thread_image"]["image_versions2"]["candidates"]
-                group_pic_url = cands[-1].get("url") or cands[0].get("url")
-            elif thread.get("custom_photo"):
+            image = thread.get('thread_image')
+            image = image if isinstance(image, dict) else {}
+            for versions in (thread.get('image_versions2'), image.get('image_versions2')):
+                candidates = versions.get('candidates') if isinstance(versions, dict) else None
+                if isinstance(candidates, list):
+                    urls = [c.get('url') for c in candidates if isinstance(c, dict) and c.get('url')]
+                    if urls:
+                        group_pic_url = urls[-1]
+                        break
+            if not group_pic_url and thread.get("custom_photo"):
                 group_pic_url = thread.get("custom_photo")
             
             # Fallback: ilk üyenin profil resmi
@@ -788,7 +797,7 @@ def fetch_group_threads(token_record):
                         group_pic_url = pic
                         break
             
-            if not group_pic_url and thread.get("inviter"):
+            if not group_pic_url and isinstance(thread.get("inviter"), dict):
                 group_pic_url = thread["inviter"].get("profile_pic_url")
             
             if group_name and len(users) > 1:
