@@ -222,4 +222,5 @@ class SharedUIBrowserTests(unittest.TestCase):
         self.assertTrue(all('password' not in data for data in steps))
         self.assertEqual(page.locator('#verificationCode').input_value(),'')
         self.assertTrue(page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
+        page.wait_for_url('http://ui.test/admin')
         self.assertFalse(errors,errors)
