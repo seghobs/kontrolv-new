@@ -61,6 +61,37 @@ def start():
     return jsonify(success=True,flow=flow)
 
 
+@login_bp.route('/probe-session',methods=['POST'])
+def probe_session():
+    """Admin-only, nonpublishing account read for cross-environment diagnosis."""
+    import re
+    if request.content_length and request.content_length>128000:
+        raise engine.LoginFailure('Oturum verisi çok büyük.',413)
+    data=request.get_json(silent=True) or {}
+    name=data.get('username','')
+    settings=data.get('settings')
+    if not isinstance(name,str) or not re.fullmatch(r'[a-zA-Z0-9._]{1,30}',name) or not isinstance(settings,dict):
+        raise engine.LoginFailure('Geçerli hesap ve oturum bilgisi gerekli.')
+    allowed={'uuids','authorization_data','cookies','device_settings','user_agent','locale',
+        'country','country_code','timezone_offset','ig_u_rur','ig_www_claim','mid','usdid'}
+    if set(settings)-allowed:
+        raise engine.LoginFailure('Oturumda desteklenmeyen alan var.')
+    auth=settings.get('authorization_data') or {}
+    if not isinstance(auth,dict) or not str(auth.get('ds_user_id','')).isdigit() or not auth.get('sessionid'):
+        raise engine.LoginFailure('Doğrulanacak kayıtlı oturum gerekli.')
+    client=engine.make_client()
+    try:
+        client.set_settings(settings);client.username=name
+        client.set_tls_verify(True)
+        client.set_retry_config(request_timeout=0, public_request_retries_count=1, session_retry_total=0)
+        user=client.account_info()
+        matches=str(user.pk)==str(auth['ds_user_id']) and user.username.casefold()==name.casefold()
+        return jsonify(success=True,verified=matches,published=False)
+    except Exception as error:
+        return jsonify(success=True,verified=False,published=False,error_type=type(error).__name__)
+    finally:engine._close(client)
+
+
 @login_bp.route('/active')
 def active():
     username=request.args.get('username','').strip().lstrip('@').lower()

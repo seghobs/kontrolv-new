@@ -53,3 +53,26 @@ class LoginAPITests(unittest.TestCase):
         with patch('app_core.luma_login.advance',side_effect=RuntimeError('SECRET')):
             response=self.client.post('/api/luma-login/test/step',headers=headers,json={'action':'poll'})
         self.assertEqual(response.status_code,503);self.assertNotIn('SECRET',response.text)
+
+    def test_session_probe_reads_account_without_publishing_or_logging_in(self):
+        from test_luma_login import FakeClient
+        client=FakeClient();client.sign()
+        client.set_tls_verify=lambda *a:None
+        client.set_retry_config=lambda **kw:None
+        headers=self.authorize()
+        settings={k:client.get_settings()[k] for k in ('uuids','authorization_data','device_settings','user_agent','cookies')}
+        with patch('app_core.luma_login.make_client',return_value=client),patch('app_core.luma_login._accept') as publish:
+            response=self.client.post('/api/luma-login/probe-session',headers=headers,
+                json={'username':'alice','settings':settings})
+        self.assertEqual(response.status_code,200);self.assertTrue(response.json['verified'])
+        self.assertFalse(response.json['published']);publish.assert_not_called()
+        client.bloks_caa_login.assert_not_called()
+        self.assertNotIn('fake-session',response.text)
+
+    def test_session_probe_rejects_transport_overrides_and_requires_admin_csrf(self):
+        self.assertEqual(self.client.post('/api/luma-login/probe-session',json={}).status_code,401)
+        headers=self.authorize()
+        self.assertEqual(self.client.post('/api/luma-login/probe-session',json={}).status_code,400)
+        response=self.client.post('/api/luma-login/probe-session',headers=headers,
+            json={'username':'alice','settings':{'proxy':'https://example.invalid'}})
+        self.assertEqual(response.status_code,400)
