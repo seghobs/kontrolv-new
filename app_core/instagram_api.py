@@ -524,64 +524,40 @@ def validate_token(token_record):
     if not user_id:
         return None
     
-    # Birincil: GraphQL profile timeline (doğal görünür, inbox kadar sıklıkla kullanılmaz)
-    try:
-        from urllib.parse import quote as _urlquote
-        headers = {
-            "authorization": token,
-            "user-agent": user_agent,
-            "x-ig-app-id": IG_APP_ID,
-            "x-ig-android-id": f"android-{android_id}",
-            "x-ig-device-id": device_id,
-            "x-fb-friendly-name": "IGProfileTimelineQuery",
-            "x-ig-bloks-serialize-payload": "true",
-            "x-ig-validate-null-in-legacy-dict": "true",
-            "content-type": "application/x-www-form-urlencoded",
-        }
-        variables = json.dumps({"user_id": user_id, "count": 1}, separators=(",", ":"))
-        data = (
-            "method=post&pretty=false&format=json&server_timestamps=true"
-            "&locale=user&purpose=refresh"
-            "&fb_api_req_friendly_name=IGProfileTimelineQuery"
-            "&client_doc_id=56030350817877850088506871007"
-            "&enable_canonical_naming=true"
-            f"&variables={_urlquote(variables)}"
-        )
-        response = _get_http_session(username).post(
-            "https://i.instagram.com/graphql/query",
-            headers=headers,
-            data=data,
-            timeout=10,
-        )
-        _update_session_from_response(username, response)
-        if response_has_invalid_session(response):
-            logger.warning("Token reddedildi (graphql): %d", response.status_code)
-            return False
-        if response.status_code == 200 and _valid_auth_probe(response):
-            logger.info("Token dogrulandi (graphql): %s", device_id[:8])
-            return True
-    except Exception as error:
-        logger.warning("Token dogrulama hatasi (graphql): %s", error)
-    
-    # Fallback: inbox
-    try:
-        headers = build_auth_headers(token, user_agent, android_id, device_id, username=username)
-        response = _get_http_session(username).get(
-            "https://i.instagram.com/api/v1/direct_v2/inbox/",
-            headers=headers,
-            timeout=10,
-        )
-        _update_session_from_response(username, response)
-        if response_has_invalid_session(response):
-            logger.warning("Token reddedildi (inbox fallback): %d", response.status_code)
-            return False
-        if response.status_code == 200 and _valid_auth_probe(response):
-            logger.info("Token dogrulandi (inbox fallback): %s", device_id[:8])
-            return True
-    except Exception as error:
-        logger.warning("Token dogrulama hatasi (inbox fallback): %s", error)
-    
-    return None
+    # Use the same authenticated account endpoint as Luma account_info().
+    # A legacy GraphQL document can reject a new app profile independently of
+    # session validity; it must not be the authority that deactivates accounts.
+    rejected = 0
+    probes = (
+        ('accounts/current_user/?edit=true', 'account'),
+        ('direct_v2/inbox/', 'inbox'),
+    )
+    for endpoint, kind in probes:
+        try:
+            headers = build_auth_headers(token, user_agent, android_id, device_id, username=username)
+            response = _get_http_session(username).get(
+                'https://i.instagram.com/api/v1/' + endpoint, headers=headers, timeout=10)
+            _update_session_from_response(username, response)
+            if response_has_invalid_session(response):
+                rejected += 1
+                continue
+            data = response.json()
+            if response.status_code != 200 or not isinstance(data, dict) or data.get('status') == 'fail':
+                continue
+            if kind == 'account':
+                user = data.get('user')
+                valid = isinstance(user, dict) and str(user.get('pk') or user.get('id') or '') == user_id
+            else:
+                valid = isinstance(data.get('inbox'), dict)
+            if valid:
+                logger.info('Token dogrulandi (%s): @%s', kind, username)
+                return True
+        except Exception as error:
+            logger.warning('Oturum dogrulama tamamlanamadi (%s): %s', kind, type(error).__name__)
+    # A restriction, timeout or unsupported response is not an expired session.
+    # Require both authenticated endpoints to explicitly reject the login.
+    return False if rejected == len(probes) else None
+
 
 
 def fetch_comment_usernames(media_id, token_record, min_id=None, progress_callback=None):

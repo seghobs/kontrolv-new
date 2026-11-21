@@ -68,6 +68,27 @@ class TokenLifecycleTests(unittest.TestCase):
             self.assertFalse(service.fetch_comments_with_failover('1',token_record=self.record)['ok'])
             invalid.assert_not_called()
 
+    def test_account_validation_uses_login_endpoint_with_cookie_not_legacy_graphql(self):
+        response=Mock(status_code=200,json=Mock(return_value={'status':'ok','user':{'pk':'123'}}))
+        client=Mock(get=Mock(return_value=response))
+        with patch.object(api,'_get_http_session',return_value=client),patch.object(api,'_update_session_from_response'):
+            self.assertTrue(api.validate_token(self.record))
+        client.post.assert_not_called()
+        self.assertIn('accounts/current_user/',client.get.call_args.args[0])
+        self.assertIn('sessionid=old',client.get.call_args.kwargs['headers']['cookie'])
+
+    def test_one_endpoint_rejection_does_not_override_valid_inbox(self):
+        rejected=Mock(status_code=403,json=Mock(return_value={'message':'login_required'}))
+        accepted=Mock(status_code=200,json=Mock(return_value={'status':'ok','inbox':{'threads':[]}}))
+        with patch.object(api,'_get_http_session',return_value=Mock(get=Mock(side_effect=[rejected,accepted]))),patch.object(api,'_update_session_from_response'):
+            self.assertTrue(api.validate_token(self.record))
+
+    def test_one_rejection_with_unknown_fallback_does_not_deactivate(self):
+        rejected=Mock(status_code=403,json=Mock(return_value={'message':'login_required'}))
+        unknown=Mock(status_code=429,json=Mock(return_value={'message':'feedback_required'}))
+        with patch.object(api,'_get_http_session',return_value=Mock(get=Mock(side_effect=[rejected,unknown]))),patch.object(api,'_update_session_from_response'):
+            self.assertIsNone(api.validate_token(self.record))
+
     def test_explicit_rejection_deactivates(self):
         with patch.object(service,'fetch_comment_usernames',return_value={'ok':False,'status':403,'invalid_session':True}):
             service.fetch_comments_with_failover('1',token_record=self.record)
