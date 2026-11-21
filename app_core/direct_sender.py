@@ -95,6 +95,13 @@ def _post_once(username, url, headers, payload):
 def send_text(target, text, token_record, *, to_user=False, request_id=None):
     account = str(token_record.get('username') or '')
     try:
+        # Queued work can still hold the account's PREVIOUS login and device.
+        # Resolve the entire verified record, not just a rotated bearer token.
+        with transaction() as conn:
+            saved = conn.execute('SELECT * FROM tokens WHERE username=?', (account,)).fetchone()
+        if not saved or not saved['is_active'] or saved['deleted_at']:
+            raise ValueError('Hesap aktif değil veya silinmiş; mesaj gönderilmedi.')
+        token_record = dict(saved)
         # Validate before reserving or touching the transport.
         if not account or not token_record.get('token') or not token_record.get('user_agent'):
             raise ValueError('Hesabın oturum bilgileri eksik; mesaj gönderilmedi.')

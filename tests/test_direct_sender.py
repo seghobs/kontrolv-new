@@ -23,6 +23,9 @@ class DirectSenderTests(unittest.TestCase):
 
     def setUp(self):
         test_jobs.JobTests.setUp(self)
+        from app_core.storage import upsert_token
+        for name in ('synthetic','one','two'):
+            upsert_token(dict(self.account(name), is_active=True))
         for name in ('socket.socket.connect', 'socket.create_connection'):
             guard = patch(name, side_effect=AssertionError('Network forbidden in DM tests'))
             guard.start(); self.addCleanup(guard.stop)
@@ -131,4 +134,12 @@ class DirectSenderTests(unittest.TestCase):
         with patch.object(dm, '_post_once') as post:
             for target, text, account in [('bad', 'hello', self.account()), ('1', '', self.account()), ('1', 'hello', {})]:
                 self.assertEqual(dm.send_text(target, text, account).state, 'rejected')
+        post.assert_not_called()
+
+    def test_removed_or_inactive_account_cannot_send_from_cached_record(self):
+        from app_core.storage import upsert_token
+        upsert_token(dict(self.account(),is_active=False))
+        with patch.object(dm,'_post_once') as post:
+            self.assertEqual(dm.send_text('123','hello',self.account()).state,'rejected')
+            self.assertEqual(dm.send_text('123','hello',self.account('deleted')).state,'rejected')
         post.assert_not_called()

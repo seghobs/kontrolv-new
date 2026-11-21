@@ -105,6 +105,37 @@ class LumaLoginTests(unittest.TestCase):
         self.assertNotIn('settings',flow);self.assertNotIn('context',flow)
         self.assertEqual(self.clients[-1].password,'')
 
+    def test_new_login_is_used_by_dm_even_when_job_holds_previous_device(self):
+        from app_core.direct_sender import send_text
+        from urllib.parse import parse_qs
+        login.start('alice','pw',owner='browser')
+        previous=storage.load_tokens()[0]
+        login.start('alice','pw',owner='browser',new_device=True)
+        current=storage.load_tokens()[0]
+        self.assertNotEqual(previous['device_id'],current['device_id'])
+        captured=[]
+        def transport(session,request,**kwargs):
+            captured.append(request)
+            body=parse_qs(request.body)
+            response=requests.Response();response.status_code=200;response.request=request
+            response._content=json.dumps({'status':'ok','payload':{'item_id':'99','thread_id':'456',
+                'client_context':body['client_context'][0]}}).encode()
+            return response
+        with patch('requests.sessions.Session.send',new=transport):
+            result=send_text('456','Synthetic integration test',previous,request_id='new-login')
+        self.assertTrue(result);self.assertEqual(len(captured),1)
+        request=captured[0];body=parse_qs(request.body)
+        self.assertEqual(request.headers['authorization'],current['token'])
+        self.assertEqual(request.headers['user-agent'],current['user_agent'])
+        self.assertEqual(request.headers['x-ig-device-id'],current['device_id'])
+        self.assertEqual(body['_uuid'][0],current['device_id'])
+        self.assertEqual(request.headers['x-ig-android-id'],'android-'+current['android_id_yeni'])
+        self.assertEqual(body['device_id'][0],request.headers['x-ig-android-id'])
+        self.assertEqual(request.headers['x-bloks-version-id'],'a'*64)
+        self.assertIn('sessionid=fake-session',request.headers['Cookie'])
+        self.assertEqual(request.headers['x-ig-family-device-id'],self.clients[-1].phone_id)
+        self.assertEqual(request.headers['ig-intended-user-id'],'123')
+
     def test_each_account_has_distinct_persistent_device(self):
         login.start('alice','pw',owner='browser');login.start('bob','pw',owner='browser')
         a=self.read_profile('alice')['settings']['uuids'];b=self.read_profile('bob')['settings']['uuids']
