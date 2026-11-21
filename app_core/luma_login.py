@@ -248,6 +248,8 @@ def start(username, password='', *, owner, fresh=False, profile_name='saved', cu
     flow = None
     try:
         with transaction() as conn:
+            from app_core.login_evidence import purge_expired
+            purge_expired(conn)
             saved = _get(conn,'luma-account:' + username) or {}
             if saved.get('retry_after',0) > time.time():
                 raise LoginFailure('Son giriş denemesi başarısız oldu. Yeniden denemeden önce üç dakika bekleyin.',429)
@@ -324,8 +326,15 @@ def start(username, password='', *, owner, fresh=False, profile_name='saved', cu
             client.password = password
             client.bloks_caa_resolve_two_step_verification = lambda result,**kw: _prepare_profile_code(client,result,**kw)
             outcome = client.bloks_caa_login(domain='i.instagram.com',verification_code='')
-            client.password = ''; password = ''
             context = _initial_approval_context(client,outcome) if not outcome.get('logged_in') else ''
+            # Retain only an unrecognized SERVER response, encrypted and bounded.
+            # This allows diagnosis without another credential replay. Passwords
+            # and codes are removed before serialization; no request is retained.
+            if (not outcome.get('logged_in') and not context
+                    and not (outcome.get('two_step') or {}).get('profile_code_context')):
+                from app_core.login_evidence import capture
+                flow['response_evidence']=capture(flow['id'],outcome.get('result') or {},password)
+            client.password = ''; password = ''
             flow['login_diagnostics'] = {
                 'response_structure':login_response_summary(client,outcome),
                 'has_caa_context':bool(getattr(client,'caa_aac','')),
