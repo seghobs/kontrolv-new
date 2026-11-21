@@ -336,6 +336,20 @@ class LumaLoginTests(unittest.TestCase):
             self.assertEqual(stored['login_diagnostics']['preflight_failed'],bool(reason))
             self.assertNotIn('login_diagnostics',flow)
 
+    def test_response_diagnostics_keep_structure_without_response_secrets(self):
+        from app_core.login_client import login_response_summary
+        client=FakeClient()
+        outcome={'result':{'status':'ok','layout':{'action':
+            'com.bloks.www.caa.login.approval "challenge_context" "SECRET-CONTEXT"'},
+            'headers':{'Authorization':'SECRET-TOKEN'},'cookies':{'sessionid':'SECRET-COOKIE'},
+            'message':'PRIVATE-EMAIL'}}
+        summary=login_response_summary(client,outcome)
+        encoded=json.dumps(summary)
+        for secret in ('SECRET-CONTEXT','SECRET-TOKEN','SECRET-COOKIE','PRIVATE-EMAIL'):
+            self.assertNotIn(secret,encoded)
+        self.assertTrue(summary['markers']['challenge_context'])
+        self.assertEqual(summary['apps'],['com.bloks.www.caa.login.approval'])
+
     def test_poll_rejects_wrong_user_before_applying_session(self):
         flow,_=self.pending();client=FakeClient()
         client.private_request=Mock(return_value={'logged_in':True})

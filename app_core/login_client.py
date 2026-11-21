@@ -3,8 +3,29 @@ import base64
 import logging
 import re
 import uuid
+import json
 
 SDK_REVISION = '62f962e3dba41d43237061635d2946ac93cc5be0'
+
+
+def login_response_summary(client, outcome):
+    """Keep protocol structure only, never response values or credentials."""
+    result = outcome.get('result')
+    text = json.dumps(result, ensure_ascii=True) if isinstance(result, (dict,list)) else ''
+    apps = sorted(set(re.findall(r'com\.bloks\.[A-Za-z0-9_.]{1,160}', text)))[:30]
+    markers = ('two_step_verification_context','two_factor_info','two_factor_identifier',
+        'challenge_context','challenge_url','checkpoint_url','polling_nonce',
+        'login_approval','login_response','error_title','error_body','error_type')
+    response = getattr(client,'last_response',None)
+    http_status = getattr(response,'status_code',None)
+    status = result.get('status') if isinstance(result,dict) else None
+    return dict(http_status=http_status if type(http_status) is int else None,
+        status=status if status in ('ok','fail') else 'unknown',
+        root_fields=sorted(key for key in result if key in ('layout','status','message',
+            'error_type','error_title','challenge','two_factor_info','data','headers','cookies'))
+            if isinstance(result,dict) else [],
+        apps=apps, markers={key:key in text for key in markers},
+        preflight_failed=outcome.get('reason') == 'CAA preflight did not return account access and attestation data')
 
 
 def make_client():

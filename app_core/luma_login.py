@@ -11,7 +11,7 @@ import time
 import uuid
 
 from app_core.jobs import transaction
-from app_core.login_client import make_client, apply_profile, device_profile
+from app_core.login_client import make_client, apply_profile, device_profile, login_response_summary
 
 APPROVAL = 'com.bloks.www.two_step_verification.has_been_allowed.async'
 VERIFY = 'com.bloks.www.two_step_verification.verify_code.async'
@@ -327,6 +327,7 @@ def start(username, password='', *, owner, fresh=False, profile_name='saved', cu
             client.password = ''; password = ''
             context = _initial_approval_context(client,outcome) if not outcome.get('logged_in') else ''
             flow['login_diagnostics'] = {
+                'response_structure':login_response_summary(client,outcome),
                 'has_caa_context':bool(getattr(client,'caa_aac','')),
                 'has_approval_context':bool(context),
                 'has_approval_screen':APPROVAL in client._bloks_all_text(outcome.get('result') or {}),
