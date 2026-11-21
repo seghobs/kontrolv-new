@@ -193,7 +193,13 @@ def save_tokens(tokens):
 def hard_delete_token(username):
     conn = _connect()
     try:
+        conn.execute('BEGIN IMMEDIATE')
         conn.execute("DELETE FROM tokens WHERE username = ?", (username,))
+        for key in ('session_state_'+username,'token_rotations_'+username,'luma-account:'+username):
+            conn.execute('DELETE FROM key_value WHERE key=?',(key,))
+        for row in conn.execute("SELECT key,value FROM key_value WHERE key GLOB 'luma-flow:*'").fetchall():
+            if json.loads(row['value']).get('username')==username:
+                conn.execute('DELETE FROM key_value WHERE key=?',(row['key'],))
         conn.commit()
         return True
     except Exception as error:

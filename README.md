@@ -465,3 +465,38 @@ Artık görünmeyen yorumlar kesin olarak “silindi” diye adlandırılmaz. Me
 İsteğe bağlı test ortamında Python Playwright ve Chrome gerekir. Üretim bağımlılığı değildir. İlk terminalde `python tests/browser/server.py`; ikinci terminalde `python tests/browser/layout.py` ve `python tests/browser/interactions.py` çalıştırın. Sunucu yalnız `127.0.0.1:5087` üzerinde geçici örnek veritabanı kullanır. Instagram çağrısı yapan toplu analiz adımları tarayıcı testinde kontrollü yanıtlarla sınanır; gerçek hesap üzerinde yük testi yapılmaz.
 
 Ayrıntılı kapsam ve kanıtlar: [Özellik doğrulama kaydı](FEATURE_VALIDATION.md).
+
+
+### Luma giriş entegrasyonu
+
+`/token_al` yönetici giriş ekranı artık Luma projesinin aynı sabit CAA/Bloks SDK
+sürümünü kullanır. Her hesabın cihaz kimliği, uygulama profili, oturumu ve bekleyen
+onay bağlamı ayrı tutulur. İlk girişte Pixel 8 Pro, Galaxy S23 veya yalnız metadata
+alanlarından oluşan özel JSON profili seçilebilir. Sonraki girişlerde kayıtlı
+cihaz korunur; cihaz değişimi ayrı ve açık bir seçenektir.
+
+Kayıtlı oturum önce hesap kimliğiyle doğrulanır. Parola ile yeniden giriş açıkça
+seçilmedikçe otomatik parola gönderilmez. Instagram uygulama onayı, e-posta,
+WhatsApp veya sunduğu başka bir kod yöntemi isterse aynı giriş bağlamından devam
+edilir. Yeni parola veya doğrulama kodu veritabanına yazılmaz. Yeni oturumun hesap
+kimliği doğrulanmadan mevcut aktif token değiştirilmez; başarılı token ve oturum
+kayıtları birlikte yayınlanır.
+
+PythonAnywhere istekleri arasında onay bağlamı veritabanında saklanır; Luma'nın
+masaüstü servisindeki bekleyen iş parçacığına ihtiyaç yoktur. Tarayıcı yenilenirse
+“Bekleyen giriş işlemini getir” kullanılabilir. Diğer hesapların oturumları ve
+mevcut yorum/DM akışları hesap bazında korunur.
+
+Normal kurulum için `pip install -r requirements.txt` yeterlidir. Bağımlılıklar
+Luma ile aynı Git revizyonuna sabittir. PythonAnywhere CPython 3.13/x86_64 Linux
+ortamına çevrimdışı dağıtım paketi hazırlamak için:
+
+```powershell
+python scripts/build_login_runtime.py --output scratch/login-runtime.zip
+```
+
+Paketi uygulama köküne `.login-runtime.zip` adıyla yükleyin ve uygulamayı yeniden
+yükleyin. Paket yalnız açık kaynak bağımlılıkları içerir. Sunucuda hesabınıza özel
+`.login-runtime/` dizinine atomik olarak açılır. Paket ve oturum verileri Git'e
+alınmaz. Yöneticiye açık `/api/luma-login/runtime` kontrolü yalnız istemciyi yükler;
+Instagram'a giriş isteği göndermez.

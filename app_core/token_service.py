@@ -291,104 +291,19 @@ def upsert_login_token(username, password, token, android_id, user_agent, device
     logger.info("Token kaydedildi: @%s (eski tokenler pasif yapildi)", username)
 
 def relogin_saved_user(username, password_override=None, device_id_override=None, user_agent_override=None, android_id_override=None):
+    """Keep the saved device/session until a replacement login is verified."""
+    from flask import has_request_context
+    from app_core import luma_login
+    from app_core.routes.login import owner
+    target=next((t for t in load_tokens() if t['username']==username),None)
+    if not target:return dict(ok=False,code=404,message="Token bulunamadı.")
     try:
-        from app_core.instagram_api import clear_http_session
-        clear_http_session(username)
-    except Exception as e:
-        logger.warning("relogin_saved_user: HTTP session silinemedi: %s", e)
-
-    try:
-        from app_core.session_state import clear_session
-        clear_session(username)
-    except Exception as e:
-        logger.warning("relogin_saved_user: DB session silinemedi: %s", e)
-
-    tokens = load_tokens()
-    target = next((item for item in tokens if item.get("username") == username), None)
-    if not target:
-        return {"ok": False, "code": 404, "message": "Token bulunamadi"}
-
-    # Cooldown kontrolü (DB seviyesinde)
-    last_fail = target.get("last_relogin_failed_at", "")
-    if last_fail:
-        try:
-            last_fail_ts = float(last_fail)
-            now_ts = datetime.now().timestamp()
-            elapsed = now_ts - last_fail_ts
-            if elapsed < 180: # 3 dakika
-                remaining = int(180 - elapsed)
-                return {
-                    "ok": False,
-                    "code": "COOLDOWN_ACTIVE",
-                    "remaining_seconds": remaining,
-                    "message": f"Son giriş denemesi başarısız oldu. Lütfen Instagram mobil uygulamasından doğrulama adımını manuel çözün. Tekrar denemek için {remaining} saniye beklemelisiniz."
-                }
-        except Exception as e:
-            logger.warning("Cooldown parse hatasi: %s", e)
-
-    stored_password = str(target.get("password", "")).strip()
-    stored_android = str(target.get("android_id_yeni", "")).strip()
-    stored_user_agent = str(target.get("user_agent", "")).strip()
-    stored_device_id = str(target.get("device_id", "")).strip()
-
-    password = (password_override or "").strip() or stored_password
-    android_id = (android_id_override or "").strip() or stored_android
-    user_agent = (user_agent_override or "").strip() or stored_user_agent
-    device_id = (device_id_override or "").strip() or stored_device_id
-
-    missing = []
-    if not password:
-        missing.append("password")
-    if not android_id:
-        missing.append("android_id")
-    if not user_agent:
-        missing.append("user_agent")
-    if not device_id:
-        missing.append("device_id")
-    if missing:
-        labels = {"password": "Sifre", "android_id": "Android ID", "user_agent": "User Agent", "device_id": "Device ID"}
-        msg = "Eksik alanlar: " + ", ".join(labels.get(k, k) for k in missing) + ". Lutfen girin."
-        return {"ok": False, "code": "FIELDS_REQUIRED", "missing": missing, "message": msg}
-
-    try:
-        new_token, new_android_id, new_user_agent, new_device_id = giris_yap(
-            username,
-            password,
-            android_id,
-            user_agent,
-            device_id,
-        )
-    except LoginError as error:
-        logger.error("Giriş hatası: %s | Tip: %s", error.message, error.error_type)
-        # Giriş başarısız olduğunda cooldown zamanını kaydet (DB'ye yaz)
-        target["last_relogin_failed_at"] = str(datetime.now().timestamp())
-        save_tokens(tokens)
-        return {
-            "ok": False,
-            "code": error.status_code or 400,
-            "message": error.message,
-            "error_type": error.error_type,
-            "details": error.details,
-        }
-
-    if not new_token:
-        target["last_relogin_failed_at"] = str(datetime.now().timestamp())
-        save_tokens(tokens)
-        return {"ok": False, "code": 400, "message": "Giris basarisiz - token alinamadi"}
-
-    target["token"] = new_token
-    target["android_id_yeni"] = new_android_id
-    target["user_agent"] = new_user_agent
-    target["device_id"] = new_device_id
-    target["password"] = password
-    target["is_active"] = True
-    target["relogin_attempts"] = 0
-    target["last_relogin_failed_at"] = "" # Başarılı girişte temizle
-    clear_logout_state(target)
-    save_tokens(tokens)
-
-    logger.info("Token yenilendi: @%s", username)
-    return {"ok": True, "message": f"@{username} icin token basariyla yenilendi"}
+        result=luma_login.start(username,password_override or '',
+            owner=owner() if has_request_context() else 'internal',fresh=bool(password_override))
+    except Exception:
+        return dict(ok=False,code=400,message="Luma giriş ekranından hesabınızla devam edin.")
+    return dict(ok=result['stage']=='done',code=200 if result['stage']=='done' else 'VERIFICATION_REQUIRED',
+                message=result['message'],flow_id=result['id'],stage=result['stage'])
 
 
 def fetch_group_threads_with_failover(token_record=None):

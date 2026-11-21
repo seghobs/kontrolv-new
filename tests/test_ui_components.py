@@ -22,7 +22,7 @@ class SharedUIBrowserTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.assets = {}
-        for name in ('form.html','result.html','tools.html'):
+        for name in ('form.html','result.html','tools.html','token.html'):
             for url in re.findall(r'https://[^"\s]+(?:\.js|\.css)', (ROOT/'templates'/name).read_text(encoding='utf-8')):
                 if url in cls.assets: continue
                 try:
@@ -197,4 +197,29 @@ class SharedUIBrowserTests(unittest.TestCase):
         self.assertEqual(page.locator('#eksiklerListesi-1 li').get_attribute('data-username'),'bob')
         self.assertTrue(page.get_by_text('Kesinleşmemiş liste',exact=True).is_visible())
         page.get_by_text('Eksikler',exact=True).last.click()
+        self.assertFalse(errors,errors)
+
+    def test_luma_login_code_flow_does_not_resubmit_credentials(self):
+        page,errors=self.page(390);starts=[];steps=[]
+        def flow(stage,**extra):return {'success':True,'flow':{'id':'flow-test','username':'alice','stage':stage,'message':'Test giriş adımı','device':'Pixel 8 Pro',**extra}}
+        def start(route):
+            starts.append(route.request.post_data_json);route.fulfill(json=flow('approval',methods=['approval']))
+        def step(route):
+            data=route.request.post_data_json;steps.append(data)
+            if data['action']=='methods':route.fulfill(json=flow('method',methods=['whatsapp']))
+            elif data['action']=='select':route.fulfill(json=flow('code',methods=['whatsapp']))
+            elif data['action']=='code':route.fulfill(json=flow('done'))
+            else:route.fulfill(json=flow('approval',methods=['approval']))
+        page.route('**/api/luma-login/start',start);page.route('**/api/luma-login/flow-test/step',step)
+        page.goto('http://ui.test/token_al',wait_until='domcontentloaded')
+        page.locator('#kullanici_adi').fill('alice');page.locator('#sifre').fill('synthetic-password')
+        page.locator('#submitBtn').click();page.locator('#showMethods').wait_for(state='visible')
+        self.assertEqual(page.locator('#sifre').input_value(),'')
+        page.locator('#showMethods').click();page.get_by_role('button',name='WhatsApp',exact=True).click()
+        page.locator('#verificationCode').fill('123456');page.locator('#verifyForm button').click()
+        page.locator('#successMessage').wait_for(state='visible')
+        self.assertEqual(len(starts),1);self.assertEqual(starts[0]['profile'],'pixel8')
+        self.assertTrue(all('password' not in data for data in steps))
+        self.assertEqual(page.locator('#verificationCode').input_value(),'')
+        self.assertTrue(page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
         self.assertFalse(errors,errors)

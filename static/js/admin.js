@@ -1307,56 +1307,7 @@ function closeReloginFieldsModal() {
 }
 
 async function reloginToken(username, overrides) {
-    const hasOverrides = overrides && typeof overrides === "object" && Object.keys(overrides).length > 0;
-    if (!hasOverrides && !confirm(`@${username} icin tekrar giris yapilacak ve token yenilenecek. Devam edilsin mi?`)) {
-        return;
-    }
-
-    if (!hasOverrides) {
-        showAlert("Tekrar giris yapiliyor...", "info");
-    }
-
-    try {
-        const payload = { username };
-        if (overrides && typeof overrides === "object") {
-            if (overrides.password != null) payload.password = overrides.password;
-            if (overrides.device_id != null) payload.device_id = overrides.device_id;
-            if (overrides.user_agent != null) payload.user_agent = overrides.user_agent;
-            if (overrides.android_id != null) payload.android_id = overrides.android_id;
-        } else if (typeof overrides === "string") {
-            payload.password = overrides;
-        }
-        const response = await fetch("/admin/relogin_token", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        });
-
-        const data = await response.json();
-        if (data.success) {
-            closeReloginFieldsModal();
-            showAlert(data.message, "success");
-            loadStats();
-            loadTokens();
-            return;
-        }
-        if (data.code === "COOLDOWN_ACTIVE") {
-            closeReloginFieldsModal();
-            showResultModal("cooldown", "Giriş Engellendi (3 Dakika)", data.message);
-            loadTokens();
-            return;
-        }
-        if (data.code === "FIELDS_REQUIRED" && data.missing && data.missing.length > 0) {
-            openReloginFieldsModal(username, data.missing);
-            return;
-        }
-        closeReloginFieldsModal();
-        showResultModal("warning", "Giriş Başarısız", "Giriş işlemi başarısız oldu. Hesap doğrulamaya (SMS, e-posta veya şüpheli hareket bildirimine) düşmüş olabilir. Lütfen telefonunuzdan Instagram uygulamasını açarak bu durumu kontrol edin ve çözün. 3 dakika boyunca tekrar giriş yapmanıza izin verilmeyecektir.");
-        loadTokens();
-
-    } catch (error) {
-        showAlert("Bir hata olustu: " + error.message, "error");
-    }
+    window.location.href = '/token_al?username=' + encodeURIComponent(username);
 }
 
 async function submitReloginFields() {

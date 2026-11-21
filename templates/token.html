@@ -51,15 +51,15 @@
             <div class="col-12 col-md-10 col-lg-8 col-xl-6">
                 <div class="login-card">
                     <h2>
-                        <i class="fas fa-key me-2"></i>Token Al
+                        <i class="fas fa-key me-2"></i>Hesap Bağla
                     </h2>
                     <div class="alert alert-info mb-4">
                         <i class="fas fa-info-circle me-2"></i>
-                        Instagram hesabınıza giriş yaparak token oluşturabilirsiniz.
+                        Luma CAA girişi: hesabınıza özel cihaz profili, kayıtlı oturum ve Instagram doğrulama adımları.
                     </div>
                     <div id="loadingMessage" class="alert alert-info mb-4" style="display: none;">
                         <i class="fas fa-spinner fa-spin me-2"></i>
-                        Token alınıyor, lütfen bekleyin...
+                        Instagram girişi işleniyor, lütfen bekleyin...
                     </div>
                     <div id="successMessage" class="alert alert-success mb-4" style="display: none;">
                         <i class="fas fa-check-circle me-2"></i>
@@ -70,45 +70,22 @@
                         <span id="errorText"></span>
                     </div>
                     <form id="loginForm">
-                        <div class="mb-3">
-                            <label for="kullanici_adi" class="form-label">
-                                <i class="fas fa-user me-2"></i>Kullanıcı Adı
-                            </label>
-                            <input type="text" id="kullanici_adi" name="kullanici_adi" class="form-control" 
-                                   placeholder="Instagram kullanıcı adınız" required>
-                        </div>
-                        <div class="mb-4">
-                            <label for="sifre" class="form-label">
-                                <i class="fas fa-lock me-2"></i>Şifre
-                            </label>
-                            <input type="password" id="sifre" name="sifre" class="form-control" 
-                                   placeholder="Instagram şifreniz" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="android_id" class="form-label">
-                                <i class="fas fa-mobile-alt me-2"></i>Android ID
-                            </label>
-                            <input type="text" id="android_id" name="android_id" class="form-control"
-                                   placeholder="Örn: 3724108ca33e7977" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="user_agent" class="form-label">
-                                <i class="fas fa-browser me-2"></i>User Agent
-                            </label>
-                            <textarea id="user_agent" name="user_agent" class="form-control"
-                                      placeholder="Örn: Instagram 415.0.0.36.76 Android (...)" rows="3" required></textarea>
-                        </div>
-                        <div class="mb-4">
-                            <label for="device_id" class="form-label">
-                                <i class="fas fa-fingerprint me-2"></i>Device ID
-                            </label>
-                            <input type="text" id="device_id" name="device_id" class="form-control"
-                                   placeholder="Örn: 550e8400-e29b-41d4-a716-446655440000" required>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100 mb-3" id="submitBtn">
-                            <i class="fas fa-sign-in-alt me-2"></i>Giriş Yap ve Token Al
-                        </button>
+                        <div class="mb-3"><label for="kullanici_adi" class="form-label">Kullanıcı adı</label><input id="kullanici_adi" class="form-control" autocomplete="username" required></div>
+                        <div class="mb-3"><label for="sifre" class="form-label">Parola</label><input type="password" id="sifre" class="form-control" autocomplete="current-password"><small>Kayıtlı oturum varsa parola göndermeden doğrulanır. Yeni girişte parola gerekir.</small></div>
+                        <div class="mb-3"><label for="deviceProfile" class="form-label">İlk giriş / yeni cihaz profili</label><select id="deviceProfile" class="form-control"><option value="pixel8">Google Pixel 8 Pro · Luma varsayılanı</option><option value="s23">Samsung Galaxy S23</option><option value="custom">Özel cihaz profili JSON</option></select><small>Her hesabın kalıcı cihaz kimlikleri ayrıdır. Sonraki girişlerde kayıtlı profil korunur.</small></div>
+                        <div id="customProfileBox" class="mb-3" hidden><label for="customProfile" class="form-label">Cihaz / uygulama bilgileri</label><textarea id="customProfile" class="form-control" rows="6" placeholder='{"device_settings": {"model": "..."}}'></textarea><small>Yalnız cihaz/uygulama bilgileri. Oturum, token ve yakalanmış güvenlik başlıkları kabul edilmez.</small></div>
+                        <label class="d-block mb-2"><input type="checkbox" id="freshLogin"> Parola ile yeniden giriş yap (kayıtlı cihaz korunur)</label>
+                        <label class="d-block mb-3"><input type="checkbox" id="newDevice"> Bu hesap için yeni cihaz profili oluştur</label>
+                        <button type="submit" class="btn btn-primary w-100 mb-3" id="submitBtn">Hesabı bağla / oturumu doğrula</button>
+                        <button type="button" class="btn btn-secondary w-100 mb-3" id="recoverLogin">Bekleyen giriş işlemini getir</button>
                     </form>
+                    <section id="loginFlow" class="mb-4" hidden aria-live="polite">
+                        <p id="flowMessage"></p><p id="flowDevice"></p>
+                        <div id="loginMethods" class="mb-3"></div>
+                        <form id="verifyForm" hidden><label for="verificationCode" class="form-label">Instagram doğrulama kodu</label><input id="verificationCode" class="form-control mb-2" autocomplete="one-time-code" inputmode="text"><button class="btn btn-primary mb-3" type="submit">Kodu doğrula</button></form>
+                        <button id="showMethods" type="button" class="btn btn-secondary mb-2" hidden>Başka doğrulama yöntemi</button>
+                        <button id="cancelLogin" type="button" class="btn btn-secondary mb-2">Girişi iptal et</button>
+                    </section>
                     <a href="/" class="btn-secondary">
                         <i class="fas fa-arrow-left me-2"></i>Ana Sayfaya Dön
                     </a>

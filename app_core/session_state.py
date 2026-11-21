@@ -223,7 +223,7 @@ def get_auth_headers(username, token, user_agent, android_id, device_id):
         "x-ig-transfer-encoding": "chunked",
         "accept-language": "tr-TR, en-US",
         # Bloks version + prism UI flags
-        "x-bloks-version-id": "dd9727564fa874f2ebf47e9eca5d00c86c1bf1eef22fcba4fd1e05edab8ec6e0",
+        "x-bloks-version-id": state.get("bloks_versioning_id") or "dd9727564fa874f2ebf47e9eca5d00c86c1bf1eef22fcba4fd1e05edab8ec6e0",
         "x-bloks-is-layout-rtl": "false",
         "x-bloks-prism-button-version": "INDIGO_PRIMARY_BORDERED_SECONDARY",
         "x-bloks-prism-colors-enabled": "true",
@@ -235,6 +235,19 @@ def get_auth_headers(username, token, user_agent, android_id, device_id):
         "x-bloks-prism-font-enabled": "true",
         "x-bloks-prism-indigo-link-version": "1",
     }
+
+    if state.get('phone_id'): headers['x-ig-family-device-id'] = state['phone_id']
+    if state.get('mid'): headers['x-mid'] = state['mid']
+    if state.get('locale'):
+        locale = state['locale'].replace('-', '_')
+        headers.update({'x-ig-app-locale':locale,'x-ig-device-locale':locale,'x-ig-mapped-locale':locale})
+        headers['accept-language'] = locale.replace('_','-') + ', en-US'
+        headers['x-ig-device-languages'] = json.dumps({'system_languages':locale.replace('_','-')})
+    if state.get('bloks_versioning_id'):
+        for key in list(headers):
+            if key.startswith('x-bloks-prism-'):headers.pop(key)
+        headers['x-bloks-is-panorama-enabled'] = 'true'
+    if state.get('timezone_offset') is not None: headers['x-ig-timezone-offset'] = str(state['timezone_offset'])
 
     # Session'dan gelen dinamik degerler
     if state.get("rur"):

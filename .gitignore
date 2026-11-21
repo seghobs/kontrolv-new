@@ -55,3 +55,5 @@ tokens.json
 
 # Local image analysis credential
 .gemini-api-key
+.login-runtime/
+.login-runtime.zip

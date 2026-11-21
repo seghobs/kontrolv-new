@@ -927,53 +927,22 @@ def add_exemption():
 
 @main_bp.route("/token_al")
 def token_page():
+    if not session.get('admin_logged_in'):
+        return redirect('/admin/login')
     return render_template("token.html")
 
 
 @main_bp.route("/giris_yaps", methods=["POST"])
 def login_and_get_token():
-    username = request.form.get("kullanici_adi", "").strip()
-    password = request.form.get("sifre", "").strip()
-    android_id = request.form.get("android_id", "").strip()
-    user_agent = request.form.get("user_agent", "").strip()
-    device_id = request.form.get("device_id", "").strip()
+    if not session.get('admin_logged_in'):
+        return jsonify(success=False,message='Yönetici girişi gerekli.'),401
+    return jsonify(success=False,message='Gelişmiş giriş ekranını kullanın.',login_url='/token_al'),409
 
-    if not username or not password or not android_id or not user_agent or not device_id:
-        return jsonify({"token": None, "message": "kullanici_adi, sifre, android_id, user_agent ve device_id zorunludur"}), 400
-
-    try:
-        token_value, android_id, user_agent, device_id = giris_yap(
-            username, password, android_id, user_agent, device_id
-        )
-    except LoginError as error:
-        logger.error("Login hatasi: @%s | %s | Tip: %s", username, error.message, error.error_type)
-        return jsonify({
-            "token": None,
-            "message": error.message,
-            "error_type": error.error_type,
-        }), 400
-    except Exception as error:
-        logger.error("Beklenmeyen login hatasi: @%s | %s", username, error)
-        return jsonify({
-            "token": None,
-            "message": f"Giris sirasinda hata olustu: {error}",
-            "error_type": "UNKNOWN",
-        }), 500
-
-    if token_value:
-        upsert_login_token(username, password, token_value, android_id, user_agent, device_id)
-
-    return jsonify(
-        {
-            "token": token_value,
-            "android_id_yeni": android_id,
-            "user_agent": user_agent,
-            "device_id": device_id,
-        }
-    )
 
 @main_bp.route("/api/relogin_active", methods=["POST"])
 def relogin_active():
+    if not session.get('admin_logged_in'):
+        return jsonify(ok=False,message='Yönetici girişi gerekli.'),401
     from app_core.storage import load_tokens
     from app_core.token_service import relogin_saved_user
     tokens = load_tokens(include_deleted=False)

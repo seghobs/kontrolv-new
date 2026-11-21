@@ -1,67 +1,36 @@
-document.getElementById("loginForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-
-    const submitBtn = document.getElementById("submitBtn");
-    const loadingMessage = document.getElementById("loadingMessage");
-    const successMessage = document.getElementById("successMessage");
-    const errorMessage = document.getElementById("errorMessage");
-
-    const username = document.getElementById("kullanici_adi").value;
-    const password = document.getElementById("sifre").value;
-    const androidId = document.getElementById("android_id").value;
-    const userAgent = document.getElementById("user_agent").value;
-    const deviceId = document.getElementById("device_id").value;
-
-    if (!username.trim() || !password.trim() || !androidId.trim() || !userAgent.trim() || !deviceId.trim()) {
-        errorMessage.style.display = "block";
-        document.getElementById("errorText").textContent = "Tum alanlar zorunludur: kullanici adi, sifre, android id, user agent, device id.";
-        return;
-    }
-
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Yukleniyor...';
-    loadingMessage.style.display = "block";
-    successMessage.style.display = "none";
-    errorMessage.style.display = "none";
-
-    try {
-        const formData = new FormData();
-        formData.append("kullanici_adi", username);
-        formData.append("sifre", password);
-        formData.append("android_id", androidId);
-        formData.append("user_agent", userAgent);
-        formData.append("device_id", deviceId);
-
-        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        const response = await fetch("/giris_yaps", {
-            method: "POST",
-            body: formData,
-            headers: {
-                "X-CSRFToken": csrfToken
-            }
-        });
-        const data = await response.json();
-
-        loadingMessage.style.display = "none";
-
-        if (data.token && data.android_id_yeni) {
-            successMessage.style.display = "block";
-            document.getElementById("successText").textContent = "Token basariyla alindi! Ana sayfaya yonlendiriliyorsunuz...";
-            setTimeout(() => {
-                window.location.href = "/";
-            }, 2000);
-            return;
-        }
-
-        if (data.message) {
-            throw new Error(data.message);
-        }
-        throw new Error("Token alinamadi");
-    } catch (_error) {
-        loadingMessage.style.display = "none";
-        errorMessage.style.display = "block";
-        document.getElementById("errorText").textContent = _error.message || "Giris basarisiz! Bilgileri kontrol edin.";
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="fas fa-sign-in-alt me-2"></i>Giris Yap ve Token Al';
-    }
-});
+(() => {
+ const el=id=>document.getElementById(id);
+ let flowId=null,timer=null,busy=false;
+ const names={approval:'Instagram uygulamasından onay',whatsapp:'WhatsApp',totp:'Doğrulama uygulaması',sms:'SMS',backup:'Yedek kod',email:'E-posta kodu'};
+ const stop=()=>{if(timer)clearTimeout(timer);timer=null;};
+ const error=message=>{el('errorMessage').style.display='block';el('errorText').textContent=message;};
+ async function api(path,data){
+  const response=await fetch('/api/luma-login'+path,data===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':document.querySelector('meta[name="csrf-token"]').content},body:JSON.stringify(data)});
+  const value=await response.json();if(!response.ok||!value.success)throw new Error(value.message||'Giriş adımı tamamlanamadı.');return value;
+ }
+ function render(flow){
+  stop();flowId=flow.id;el('loginFlow').hidden=false;el('flowMessage').textContent=flow.message||'';
+  el('flowDevice').textContent=flow.device?'Kayıtlı cihaz: '+flow.device:'';el('loginMethods').replaceChildren();
+  el('verifyForm').hidden=flow.stage!=='code';el('showMethods').hidden=flow.stage!=='approval';
+  el('cancelLogin').hidden=['done','failed','cancelled'].includes(flow.stage);el('submitBtn').disabled=!['done','failed','cancelled'].includes(flow.stage);
+  if(flow.stage==='method')for(const method of flow.methods||[]){const button=document.createElement('button');button.type='button';button.className='btn btn-primary me-2 mb-2';button.textContent=names[method]||method;button.addEventListener('click',()=>step('select',{method}));el('loginMethods').append(button);}
+  if(flow.stage==='approval')timer=setTimeout(()=>step('poll'),3000);
+  if(flow.stage==='done'){el('successMessage').style.display='block';el('successText').textContent=flow.message;}
+ }
+ async function step(action,extra={}){
+  if(busy||!flowId)return;busy=true;stop();el('errorMessage').style.display='none';
+  try{render((await api('/'+flowId+'/step',{action,...extra})).flow);}catch(exc){error(exc.message);el('submitBtn').disabled=false;}finally{busy=false;}
+ }
+ el('loginForm').addEventListener('submit',async event=>{
+  event.preventDefault();if(busy)return;busy=true;stop();el('errorMessage').style.display='none';el('successMessage').style.display='none';el('loadingMessage').style.display='block';el('submitBtn').disabled=true;
+  let password=el('sifre').value;
+  try{const profile=el('deviceProfile').value;const data={username:el('kullanici_adi').value.trim(),password,profile,fresh:el('freshLogin').checked,new_device:el('newDevice').checked};if(profile==='custom')data.custom_profile=JSON.parse(el('customProfile').value);render((await api('/start',data)).flow);data.password='';}
+  catch(exc){error(exc.message);el('submitBtn').disabled=false;}finally{password='';el('sifre').value='';busy=false;el('loadingMessage').style.display='none';}
+ });
+ el('verifyForm').addEventListener('submit',event=>{event.preventDefault();const code=el('verificationCode').value.trim();el('verificationCode').value='';step('code',{code});});
+ el('showMethods').addEventListener('click',()=>step('methods'));el('cancelLogin').addEventListener('click',()=>step('cancel'));
+ el('deviceProfile').addEventListener('change',()=>{el('customProfileBox').hidden=el('deviceProfile').value!=='custom';});
+ el('recoverLogin').addEventListener('click',async()=>{if(busy)return;busy=true;stop();try{render((await api('/active?username='+encodeURIComponent(el('kullanici_adi').value.trim()))).flow);}catch(exc){error(exc.message);}finally{busy=false;}});
+ const username=new URLSearchParams(location.search).get('username');if(username)el('kullanici_adi').value=username;
+ window.addEventListener('pagehide',stop);
+})();
