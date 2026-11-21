@@ -224,3 +224,19 @@ class SharedUIBrowserTests(unittest.TestCase):
         self.assertTrue(page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
         page.wait_for_url('http://ui.test/admin')
         self.assertFalse(errors,errors)
+
+    def test_phone_approval_automatically_polls_and_redirects_without_password_replay(self):
+        page,errors=self.page(390);starts=[];polls=[]
+        def start(route):
+            starts.append(route.request.post_data_json)
+            route.fulfill(json={'success':True,'flow':{'id':'phone-flow','stage':'approval','message':'Telefondan onaylayın'}})
+        def poll(route):
+            polls.append(route.request.post_data_json)
+            route.fulfill(json={'success':True,'flow':{'id':'phone-flow','stage':'done','message':'Onaylandı'}})
+        page.route('**/api/luma-login/start',start)
+        page.route('**/api/luma-login/phone-flow/step',poll)
+        page.goto('http://ui.test/instagram-login',wait_until='domcontentloaded')
+        page.locator('#kullanici_adi').fill('alice');page.locator('#sifre').fill('synthetic-password')
+        page.locator('#submitBtn').click();page.wait_for_url('http://ui.test/admin')
+        self.assertEqual(len(starts),1);self.assertEqual(polls,[{'action':'poll'}])
+        self.assertFalse(errors,errors)

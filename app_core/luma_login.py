@@ -185,6 +185,49 @@ def _approval_screen(flow, client, result, context, *, open_entry=True):
                 methods=['approval'])
 
 
+def _initial_approval_context(client, outcome):
+    context = outcome.get('two_step_verification_context')
+    if isinstance(context, str) and context.strip():
+        return context.strip()
+    result = outcome.get('result') or {}
+    try:
+        context = client.bloks_extract_two_step_verification_context(result)
+    except (AttributeError, TypeError):
+        context = ''
+    if isinstance(context, str) and context.strip():
+        return context.strip()
+    # CAA can return the approval screen directly, without redirecting through
+    # entrypoint (the SDK extractor only targets entrypoint's action map).
+    # Read only literal parameters from fixed server-issued actions; never
+    # evaluate response programs or invent/reuse an earlier login's context.
+    for action in (APPROVAL, 'com.bloks.www.two_step_verification.entrypoint'):
+        context = client._bloks_extract_context_value(result, action, 'two_step_verification_context')
+        if isinstance(context, str) and context.strip():
+            return context.strip()
+    return ''
+
+
+def _apply_approval_response(client, result, username):
+    if not isinstance(result, dict) or result.get('status') == 'fail':
+        raise LoginFailure('Instagram giriş onayını reddetti veya onayın süresi doldu.')
+    parsed = client.bloks_extract_login_response(result)
+    if not parsed:
+        return False
+    response = parsed.get('login_response')
+    user = response.get('logged_in_user') if isinstance(response, dict) else None
+    if not isinstance(user, dict):
+        raise LoginFailure('Instagram onay yanıtındaki hesap kimliği doğrulanamadı.')
+    pk = str(user.get('pk') or user.get('pk_id') or '')
+    name = user.get('username') or ''
+    if not pk.isdecimal() or not isinstance(name, str) or (name and name.casefold() != username.casefold()):
+        raise LoginFailure('Instagram onay yanıtındaki hesap kimliği eşleşmedi.')
+    if not client.bloks_apply_login_response(parsed):
+        return False
+    if pk != str(client.user_id):
+        raise LoginFailure('Instagram onay yanıtındaki oturum kimliği eşleşmedi.')
+    return True
+
+
 def _methods(flow, client):
     result = client.bloks_two_step_verification_method_picker(flow['context'])
     if client.bloks_apply_login_response(result):
@@ -282,15 +325,24 @@ def start(username, password='', *, owner, fresh=False, profile_name='saved', cu
             client.bloks_caa_resolve_two_step_verification = lambda result,**kw: _prepare_profile_code(client,result,**kw)
             outcome = client.bloks_caa_login(domain='i.instagram.com',verification_code='')
             client.password = ''; password = ''
+            context = _initial_approval_context(client,outcome) if not outcome.get('logged_in') else ''
+            flow['login_diagnostics'] = {
+                'has_caa_context':bool(getattr(client,'caa_aac','')),
+                'has_approval_context':bool(context),
+                'has_approval_screen':APPROVAL in client._bloks_all_text(outcome.get('result') or {}),
+                'preflight_failed':outcome.get('reason') == 'CAA preflight did not return account access and attestation data',
+            }
             if outcome.get('logged_in'):
                 _accept(flow,client)
             elif (outcome.get('two_step') or {}).get('profile_code_context'):
                 flow.update(stage='code', profile_code_context=outcome['two_step']['profile_code_context'],
                             methods=['email'],message='Instagram’ın gönderdiği doğrulama kodunu girin.')
-            elif outcome.get('two_step_verification_context'):
-                _approval_screen(flow,client,outcome.get('result') or {},outcome['two_step_verification_context'])
+            elif context:
+                _approval_screen(flow,client,outcome.get('result') or {},context)
             else:
-                raise LoginFailure('Instagram oturum veya devam edilebilir onay bilgisi döndürmedi. Resmî uygulamadan hesabı kontrol edin.')
+                if flow['login_diagnostics']['preflight_failed']:
+                    raise LoginFailure('Instagram giriş hazırlığını tamamlamadı; telefon onayı bekleme aşamasına geçilemedi. Giriş otomatik tekrarlanmadı.')
+                raise LoginFailure('Instagram bu istek için telefon onayını takip edecek işlem kimliğini döndürmedi. Telefonda onay vermiş olsanız da oturum henüz alınamadı. Giriş otomatik tekrarlanmadı.')
     except Exception as error:
         if flow is None:
             raise
@@ -350,7 +402,7 @@ def advance(flow_id, owner, action, code='', method=''):
                     'device_id':client.android_device_id,'cloud_trust_token':None,'machine_id':client.mid},
                 'server_params':flow['server']}),with_signature=False,domain='i.instagram.com',login=True,
                 headers={'X-FB-Friendly-Name':'IgApi: '+endpoint})
-            if client.bloks_apply_login_response(result):
+            if _apply_approval_response(client,result,flow['username']):
                 _accept(flow,client)
             else:
                 _approval_screen(flow,client,result,flow['context'],open_entry=False)

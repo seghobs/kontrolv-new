@@ -70,6 +70,8 @@ class FakeClient:
     def bloks_apply_login_response(self,result):
         if result.get('logged_in'):self.sign();return True
         return False
+    def bloks_extract_login_response(self,result):
+        return {'logged_in':True,'login_response':{'logged_in_user':{'pk':'123','username':self.username}}} if result.get('logged_in') else {}
     def _bloks_all_text(self,result):return json.dumps(result)
     def bloks_extract_two_step_verification_context(self,result):return result.get('context')
     def _bloks_extract_context_value(self,result,action,key):return None
@@ -304,6 +306,44 @@ class LumaLoginTests(unittest.TestCase):
         params=resumed.private_request.call_args.kwargs['data']
         self.assertEqual(params['server_params']['two_step_verification_context'],'server-context')
         self.assertNotIn('password',json.dumps(params));self.assertEqual(initial.password,'')
+
+    def test_direct_approval_screen_context_is_recovered_and_completed(self):
+        initial=FakeClient()
+        initial.bloks_caa_login=Mock(return_value={'logged_in':False,
+            'result':{'step':login.APPROVAL},'two_step_verification_context':''})
+        initial._bloks_extract_context_value=Mock(side_effect=lambda result,action,key:
+            'direct-screen-context' if action==login.APPROVAL and key=='two_step_verification_context' else None)
+        with patch.object(login,'make_client',return_value=initial):
+            flow=login.start('alice','pw',owner='browser')
+        self.assertEqual(flow['stage'],'approval')
+        initial.bloks_two_step_verification_entrypoint.assert_not_called()
+        resumed=FakeClient();resumed.private_request=Mock(return_value={'logged_in':True})
+        with patch.object(login,'make_client',return_value=resumed):
+            done=login.advance(flow['id'],'browser','poll')
+        self.assertEqual(done['stage'],'done')
+        self.assertEqual(resumed.private_request.call_args.kwargs['data']['server_params']['two_step_verification_context'],'direct-screen-context')
+        resumed.bloks_caa_login.assert_not_called()
+
+    def test_missing_context_or_preflight_is_not_misreported_as_waiting_for_phone(self):
+        for index,reason in enumerate(('', 'CAA preflight did not return account access and attestation data')):
+            client=FakeClient();client.bloks_caa_login=Mock(return_value={'logged_in':False,'reason':reason})
+            with patch.object(login,'make_client',return_value=client):
+                flow=login.start('missing'+str(index),'pw',owner='browser')
+            self.assertEqual(flow['stage'],'failed')
+            with login.transaction() as conn:
+                stored=login._get(conn,'luma-flow:'+flow['id'])
+            self.assertFalse(stored['login_diagnostics']['has_approval_context'])
+            self.assertEqual(stored['login_diagnostics']['preflight_failed'],bool(reason))
+            self.assertNotIn('login_diagnostics',flow)
+
+    def test_poll_rejects_wrong_user_before_applying_session(self):
+        flow,_=self.pending();client=FakeClient()
+        client.private_request=Mock(return_value={'logged_in':True})
+        client.bloks_extract_login_response=Mock(return_value={'login_response':{'logged_in_user':{'pk':'999','username':'another'}}})
+        client.bloks_apply_login_response=Mock()
+        with patch.object(login,'make_client',return_value=client):
+            result=login.advance(flow['id'],'browser','poll')
+        self.assertEqual(result['stage'],'failed');client.bloks_apply_login_response.assert_not_called()
 
     def test_other_browser_cannot_inspect_or_continue_flow(self):
         flow,_=self.pending()
