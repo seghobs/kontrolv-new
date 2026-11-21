@@ -240,3 +240,20 @@ class SharedUIBrowserTests(unittest.TestCase):
         page.locator('#submitBtn').click();page.wait_for_url('http://ui.test/admin')
         self.assertEqual(len(starts),1);self.assertEqual(polls,[{'action':'poll'}])
         self.assertFalse(errors,errors)
+
+    def test_rejected_login_shows_error_and_never_starts_approval_poll(self):
+        page,errors=self.page(390);starts=[];polls=[]
+        message='Instagram kullanıcı adı veya parolayı kabul etmedi.'
+        def start(route):
+            starts.append(route.request.post_data_json)
+            route.fulfill(json={'success':True,'flow':{'id':'failed-flow','stage':'failed','message':message}})
+        page.route('**/api/luma-login/start',start)
+        page.route('**/api/luma-login/failed-flow/step',lambda route:polls.append(route.request.url))
+        page.goto('http://ui.test/instagram-login',wait_until='domcontentloaded')
+        page.locator('#kullanici_adi').fill('alice');page.locator('#sifre').fill('synthetic-password')
+        page.locator('#submitBtn').click();page.locator('#errorMessage').wait_for(state='visible')
+        self.assertEqual(page.locator('#errorText').inner_text(),message)
+        self.assertEqual(len(starts),1);self.assertEqual(polls,[])
+        self.assertTrue(page.locator('#submitBtn').is_enabled())
+        self.assertEqual(page.locator('#sifre').input_value(),'')
+        self.assertFalse(errors,errors)

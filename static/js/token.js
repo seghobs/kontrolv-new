@@ -15,6 +15,7 @@
   el('cancelLogin').hidden=['done','failed','cancelled'].includes(flow.stage);el('submitBtn').disabled=!['done','failed','cancelled'].includes(flow.stage);
   if(flow.stage==='method')for(const method of flow.methods||[]){const button=document.createElement('button');button.type='button';button.className='btn btn-primary me-2 mb-2';button.textContent=names[method]||method;button.addEventListener('click',()=>step('select',{method}));el('loginMethods').append(button);}
   if(flow.stage==='approval')timer=setTimeout(()=>step('poll'),3000);
+  if(flow.stage==='failed'){error(flow.message||'Giriş tamamlanamadı.');el('flowMessage').textContent='';}
   if(flow.stage==='done'){
    el('successMessage').style.display='block';
    el('successText').textContent='Oturum kaydedildi. Yönetim paneline yönlendiriliyorsunuz…';

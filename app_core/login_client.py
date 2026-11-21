@@ -8,6 +8,21 @@ import json
 SDK_REVISION = '62f962e3dba41d43237061635d2946ac93cc5be0'
 
 
+def login_response_error(outcome):
+    """Read an observed CAA error dialog without executing Bloks code.
+
+    status=ok means the UI program was delivered, not authenticated. Require
+    the emitted failure event, rather than incidental password-screen text.
+    """
+    result=outcome.get('result')
+    if not isinstance(result,dict):return None
+    text=json.dumps(result,ensure_ascii=False).casefold()
+    if ('login_wrong_password_error_dialog_shown' in text
+            and ('incorrect password' in text or 'login_failure' in text)):
+        return 'bad_password'
+    return None
+
+
 def login_response_summary(client, outcome):
     """Keep protocol structure only, never response values or credentials."""
     result = outcome.get('result')

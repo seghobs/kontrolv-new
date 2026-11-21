@@ -350,6 +350,28 @@ class LumaLoginTests(unittest.TestCase):
         self.assertTrue(summary['markers']['challenge_context'])
         self.assertEqual(summary['apps'],['com.bloks.www.caa.login.approval'])
 
+    def test_http_200_wrong_password_bloks_dialog_is_not_an_approval_failure(self):
+        client=FakeClient()
+        client.bloks_caa_login=Mock(return_value={'logged_in':False,'result':{'status':'ok',
+            'layout':{'bloks_payload':{'action':'(log "login_wrong_password_error_dialog_shown" "login_failure") (dialog "Incorrect password" "The password you entered is incorrect. Please try again.")'}}}})
+        with patch.object(login,'make_client',return_value=client):
+            flow=login.start('alice','wrong-secret',owner='browser')
+        self.assertEqual(flow['stage'],'failed')
+        self.assertIn('parolayı kabul etmedi',flow['message'])
+        self.assertNotIn('işlem kimliğini',flow['message'])
+        client.bloks_two_step_verification_entrypoint.assert_not_called()
+        self.assertEqual(client.bloks_caa_login.call_count,1)
+        self.assertEqual(storage.load_tokens(),[])
+        with login.transaction() as conn:stored=login._get(conn,'luma-flow:'+flow['id'])
+        self.assertEqual(stored['error_code'],'bad_password')
+        self.assertNotIn('response_evidence',stored)
+
+    def test_password_word_or_unused_handler_alone_does_not_imply_bad_password(self):
+        from app_core.login_client import login_response_error
+        for action in ('Enter your password','login_wrong_password_error_dialog_ok_clicked',
+                       'Incorrect password','com.bloks.www.two_step_verification.has_been_allowed.async'):
+            self.assertIsNone(login_response_error({'result':{'layout':{'action':action}}}))
+
     def test_poll_rejects_wrong_user_before_applying_session(self):
         flow,_=self.pending();client=FakeClient()
         client.private_request=Mock(return_value={'logged_in':True})

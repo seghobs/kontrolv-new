@@ -11,7 +11,7 @@ import time
 import uuid
 
 from app_core.jobs import transaction
-from app_core.login_client import make_client, apply_profile, device_profile, login_response_summary
+from app_core.login_client import make_client, apply_profile, device_profile, login_response_summary, login_response_error
 
 APPROVAL = 'com.bloks.www.two_step_verification.has_been_allowed.async'
 VERIFY = 'com.bloks.www.two_step_verification.verify_code.async'
@@ -327,16 +327,18 @@ def start(username, password='', *, owner, fresh=False, profile_name='saved', cu
             client.bloks_caa_resolve_two_step_verification = lambda result,**kw: _prepare_profile_code(client,result,**kw)
             outcome = client.bloks_caa_login(domain='i.instagram.com',verification_code='')
             context = _initial_approval_context(client,outcome) if not outcome.get('logged_in') else ''
+            response_error = login_response_error(outcome) if not outcome.get('logged_in') else None
             # Retain only an unrecognized SERVER response, encrypted and bounded.
             # This allows diagnosis without another credential replay. Passwords
             # and codes are removed before serialization; no request is retained.
-            if (not outcome.get('logged_in') and not context
+            if (not outcome.get('logged_in') and not response_error and not context
                     and not (outcome.get('two_step') or {}).get('profile_code_context')):
                 from app_core.login_evidence import capture
                 flow['response_evidence']=capture(flow['id'],outcome.get('result') or {},password)
             client.password = ''; password = ''
             flow['login_diagnostics'] = {
                 'response_structure':login_response_summary(client,outcome),
+                'response_error':response_error,
                 'has_caa_context':bool(getattr(client,'caa_aac','')),
                 'has_approval_context':bool(context),
                 'has_approval_screen':APPROVAL in client._bloks_all_text(outcome.get('result') or {}),
@@ -344,6 +346,9 @@ def start(username, password='', *, owner, fresh=False, profile_name='saved', cu
             }
             if outcome.get('logged_in'):
                 _accept(flow,client)
+            elif response_error == 'bad_password':
+                flow['error_code']='bad_password'
+                raise LoginFailure('Instagram kullanıcı adı veya parolayı kabul etmedi. Giriş bilgilerinizi kontrol edin. Telefon onayı aşaması başlamadı.')
             elif (outcome.get('two_step') or {}).get('profile_code_context'):
                 flow.update(stage='code', profile_code_context=outcome['two_step']['profile_code_context'],
                             methods=['email'],message='Instagram’ın gönderdiği doğrulama kodunu girin.')
