@@ -192,6 +192,38 @@ class LumaLoginTests(unittest.TestCase):
             result=api.fetch_group_media(record,'789',complete=True)
         self.assertTrue(result['ok'],result);self.assertEqual(len(calls),2)
 
+    def test_all_25_presets_generate_separate_ids_even_for_same_model(self):
+        from app_core.device_profiles import DEVICE_PROFILES
+        self.assertEqual(len(DEVICE_PROFILES),25)
+        seen=set()
+        for index,key in enumerate(DEVICE_PROFILES):
+            for duplicate_model in range(2):
+                name='device'+str(index)+'_'+str(duplicate_model)
+                flow=login.start(name,'pw',owner='browser',profile_name=key)
+                self.assertEqual(flow['stage'],'done',flow)
+                ids=self.read_profile(name)['settings']['uuids']
+                values=set(ids.values())
+                self.assertEqual(len(values),7);self.assertFalse(values & seen)
+                seen.update(values)
+        self.assertEqual(len(seen),350)
+
+    def test_custom_profile_cannot_duplicate_another_saved_device(self):
+        login.start('alice','pw',owner='browser')
+        ids=self.read_profile()['settings']['uuids']
+        with self.assertRaises(login.LoginFailure):
+            login.start('bob','pw',owner='browser',profile_name='custom',
+                custom_profile={'uuids':{'uuid':ids['uuid']}})
+        self.assertIsNone(self.read_profile('bob'))
+
+    def test_existing_device_keeps_all_persistent_ids_when_another_preset_is_selected(self):
+        login.start('alice','pw',owner='browser',profile_name='s24')
+        before=self.read_profile()['settings']['uuids']
+        flow=login.start('alice',owner='browser',profile_name='pixel9')
+        self.assertEqual(flow['device'],'SM-S921B')
+        after=self.read_profile()['settings']['uuids']
+        for key in ('uuid','android_device_id','phone_id','advertising_id','tray_session_id'):
+            self.assertEqual(before[key],after[key])
+
     def test_each_account_has_distinct_persistent_device(self):
         login.start('alice','pw',owner='browser');login.start('bob','pw',owner='browser')
         a=self.read_profile('alice')['settings']['uuids'];b=self.read_profile('bob')['settings']['uuids']

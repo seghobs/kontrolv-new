@@ -212,6 +212,7 @@ def start(username, password='', *, owner, fresh=False, profile_name='pixel8', c
             if active and active['expires']>time.time() and active['stage'] not in ('done','failed','cancelled'):
                 raise LoginFailure('Bu hesap için devam eden giriş var; mevcut işlemi tamamlayın veya iptal edin.',409)
         settings = saved.get('settings') if not new_device else None
+        creating_device = not bool(settings)
         if settings:
             if custom_profile is not None:
                 raise LoginFailure('Kayıtlı cihazı değiştirmek için “Yeni cihaz profili” seçeneğini açın.')
@@ -231,6 +232,8 @@ def start(username, password='', *, owner, fresh=False, profile_name='pixel8', c
                     for cookie in state.get('http_cookies',[]):
                         client.private.cookies.set_cookie(requests.cookies.create_cookie(**cookie))
         else:
+            from app_core.device_profiles import new_identity
+            client.set_uuids(new_identity())
             apply_profile(client, device_profile(profile_name, custom_profile))
         if fresh or new_device:
             settings = client.get_settings()
@@ -251,6 +254,9 @@ def start(username, password='', *, owner, fresh=False, profile_name='pixel8', c
             active = _get(conn,'luma-flow:' + current.get('flow_id',''))
             if active and active['expires']>time.time() and active['stage'] not in ('done','failed','cancelled'):
                 raise LoginFailure('Bu hesap için başka giriş işlemi başladı.',409)
+            if creating_device:
+                from app_core.device_profiles import ensure_unused_identity
+                ensure_unused_identity(conn, client.get_settings().get('uuids',{}))
             current.update(flow_id=flow['id'],settings=flow['settings'],device=flow['device'],owner=username)
             _put(conn,'luma-account:' + username,current)
             _put(conn,'luma-flow:' + flow['id'],flow)

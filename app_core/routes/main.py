@@ -930,7 +930,8 @@ def add_exemption():
 def token_page():
     if not session.get('admin_logged_in'):
         return redirect('/admin/login?next=/instagram-login')
-    return render_template("token.html")
+    from app_core.device_profiles import DEVICE_PROFILES
+    return render_template("token.html", device_profiles=DEVICE_PROFILES)
 
 
 @main_bp.route("/giris_yaps", methods=["POST"])

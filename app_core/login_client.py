@@ -112,10 +112,7 @@ def device_profile(name='pixel8', custom=None):
         if not isinstance(custom, dict):
             raise ValueError('Özel cihaz profili JSON nesnesi olmalı.')
         return custom
-    if name not in ('pixel8', 's23'):
+    from app_core.device_profiles import DEVICE_PROFILES
+    if name not in DEVICE_PROFILES:
         raise ValueError('Cihaz profili tanınmıyor.')
-    if name == 'pixel8':
-        return {}  # Luma's SDK-supported app/device defaults; UUIDs are per account.
-    return {'device_settings': {'android_version': 34, 'android_release': '14', 'dpi': '480dpi',
-        'resolution': '1080x2340', 'manufacturer': 'samsung', 'model': 'SM-S911B',
-        'device': 'dm1q', 'cpu': 'qcom'}}
+    return {'device_settings':dict(DEVICE_PROFILES[name]['device_settings'])}
