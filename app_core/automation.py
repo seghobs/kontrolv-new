@@ -4,11 +4,8 @@ import logging
 import os
 import random
 import time
-import uuid
-from app_core.delivery import classify_dm, DeliveryResult
 
 import pytz
-import requests
 
 logger = logging.getLogger(__name__)
 
@@ -74,69 +71,15 @@ def _get_user_id_by_username(username, token_record):
         return None
 
 
-def _send_dm_to_user(recipient_user_id, text, token_record):
-    """Belirli bir kullanıcıya (thread yeriıne user ID ile) DM gönderir."""
-    token = token_record.get("token", "")
-    user_agent = token_record.get("user_agent", "")
-    android_id = token_record.get("android_id_yeni", "")
-    device_id = token_record.get("device_id", "")
-    username = token_record.get("username", "")
-    from app_core.instagram_api import build_auth_headers, _get_http_session, _update_session_from_response
-    headers = build_auth_headers(token, user_agent, android_id, device_id, username=username)
-    headers["content-type"] = "application/x-www-form-urlencoded"
-    payload = {
-        "text": text,
-        "recipient_users": f"[[{recipient_user_id}]]",
-        "action": "send_item",
-        "client_context": str(uuid.uuid4()),
-    }
-    try:
-        resp = _get_http_session(username).post(
-            "https://i.instagram.com/api/v1/direct_v2/threads/broadcast/text/",
-            headers=headers,
-            data=payload,
-            timeout=15,
-        )
-        _update_session_from_response(token_record.get("username", ""), resp)
-        logger.info("Bildirim DM sonucu user=%s status=%s", recipient_user_id, resp.status_code)
-        result = classify_dm(resp)
-        logger.info("DM outcome code=%s http=%s", result.code, resp.status_code)
-        return result
-    except Exception as e:
-        logger.warning("DM transport failure type=%s", type(e).__name__)
-        return DeliveryResult("unknown", "Bağlantı kesildi; mesaj sonucu belirsiz. Yeniden göndermeden önce konuşmayı kontrol edin.", "transport_error")
+def _send_dm_to_user(recipient_user_id, text, token_record, request_id=None):
+    """Send with the same text/link identity contract as the reference client."""
+    from app_core.direct_sender import send_text
+    return send_text(recipient_user_id, text, token_record, to_user=True, request_id=request_id)
 
 
-def _send_dm(thread_id, text, token_record):
-    token = token_record.get("token", "")
-    user_agent = token_record.get("user_agent", "")
-    android_id = token_record.get("android_id_yeni", "")
-    device_id = token_record.get("device_id", "")
-    username = token_record.get("username", "")
-    from app_core.instagram_api import build_auth_headers, _get_http_session, _update_session_from_response
-    headers = build_auth_headers(token, user_agent, android_id, device_id, username=username)
-    headers["content-type"] = "application/x-www-form-urlencoded"
-    payload = {
-        "text": text,
-        "thread_ids": f"[{thread_id}]",
-        "action": "send_item",
-        "client_context": str(uuid.uuid4()),
-    }
-    try:
-        resp = _get_http_session(username).post(
-            "https://i.instagram.com/api/v1/direct_v2/threads/broadcast/text/",
-            headers=headers,
-            data=payload,
-            timeout=15,
-        )
-        _update_session_from_response(token_record.get("username", ""), resp)
-        logger.info("DM sonucu thread=%s status=%s", thread_id, resp.status_code)
-        result = classify_dm(resp)
-        logger.info("DM outcome code=%s http=%s", result.code, resp.status_code)
-        return result
-    except Exception as e:
-        logger.warning("DM transport failure type=%s", type(e).__name__)
-        return DeliveryResult("unknown", "Bağlantı kesildi; mesaj sonucu belirsiz. Yeniden göndermeden önce konuşmayı kontrol edin.", "transport_error")
+def _send_dm(thread_id, text, token_record, request_id=None):
+    from app_core.direct_sender import send_text
+    return send_text(thread_id, text, token_record, request_id=request_id)
 
 
 def _fetch_comment_usernames(media_id, token_record):

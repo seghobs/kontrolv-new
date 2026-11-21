@@ -74,8 +74,10 @@ def execute_claimed(job):
             def before_send():
                 check_active()
                 jobs.mark_effects_started(job_id, owner)
-            result = run_automation_for_thread(**payload, before_send=before_send,
-                on_result=lambda result: jobs.snapshot(job_id,owner,result))
+            from app_core.direct_sender import send_scope
+            with send_scope('automation:' + job_id):
+                result = run_automation_for_thread(**payload, before_send=before_send,
+                    on_result=lambda result: jobs.snapshot(job_id,owner,result))
         check_active()
         jobs.complete(job_id, owner, result or {})
     except Exception as error:

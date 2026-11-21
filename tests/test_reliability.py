@@ -49,13 +49,13 @@ class ReliabilityTests(unittest.TestCase):
         self.assertFalse(classify_dm(self.response(body=body)))
 
     def test_both_dm_paths_report_unknown_after_timeout_without_retry(self):
-        http = Mock(); http.post.side_effect = requests.Timeout()
-        with patch.object(api, 'build_auth_headers', return_value={}), patch.object(api, '_get_http_session', return_value=http):
+        account = self.account()
+        with patch.object(api, 'build_auth_headers', return_value={}), patch('app_core.direct_sender._post_once', side_effect=requests.Timeout()) as post:
             for function in (automation._send_dm, automation._send_dm_to_user):
-                http.reset_mock()
-                result = function('123','test', {})
+                post.reset_mock()
+                result = function('123','test', account)
                 self.assertFalse(result); self.assertEqual(result.state, 'unknown')
-                self.assertEqual(http.post.call_count, 1)
+                self.assertEqual(post.call_count, 1)
 
     def test_notification_stops_after_first_unconfirmed_send(self):
         with patch('app_core.init_storage'): app = create_app()
