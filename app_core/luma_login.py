@@ -348,7 +348,7 @@ def start(username, password='', *, owner, fresh=False, profile_name='saved', cu
                 _accept(flow,client)
             elif response_error == 'bad_password':
                 flow['error_code']='bad_password'
-                raise LoginFailure('Instagram kullanıcı adı veya parolayı kabul etmedi. Giriş bilgilerinizi kontrol edin. Telefon onayı aşaması başlamadı.')
+                raise LoginFailure('Instagram bu giriş isteğini “parola hatalı” yanıtıyla reddetti. Bu yanıt tek başına parolanızın yanlış olduğunu göstermez; ağ, cihaz veya oturum güveni nedeniyle de oluşabilir. Telefon onayı aşaması başlamadı.')
             elif (outcome.get('two_step') or {}).get('profile_code_context'):
                 flow.update(stage='code', profile_code_context=outcome['two_step']['profile_code_context'],
                             methods=['email'],message='Instagram’ın gönderdiği doğrulama kodunu girin.')

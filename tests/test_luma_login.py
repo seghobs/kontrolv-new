@@ -357,7 +357,7 @@ class LumaLoginTests(unittest.TestCase):
         with patch.object(login,'make_client',return_value=client):
             flow=login.start('alice','wrong-secret',owner='browser')
         self.assertEqual(flow['stage'],'failed')
-        self.assertIn('parolayı kabul etmedi',flow['message'])
+        self.assertIn('tek başına parolanızın yanlış olduğunu göstermez',flow['message'])
         self.assertNotIn('işlem kimliğini',flow['message'])
         client.bloks_two_step_verification_entrypoint.assert_not_called()
         self.assertEqual(client.bloks_caa_login.call_count,1)

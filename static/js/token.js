@@ -30,7 +30,7 @@
  el('loginForm').addEventListener('submit',async event=>{
   event.preventDefault();if(busy)return;busy=true;stop();el('errorMessage').style.display='none';el('successMessage').style.display='none';el('loadingMessage').style.display='block';el('submitBtn').disabled=true;
   let password=el('sifre').value;
-  try{const profile=el('deviceProfile').value;const data={username:el('kullanici_adi').value.trim(),password,profile,fresh:el('freshLogin').checked,new_device:el('newDevice').checked};if(profile==='custom')data.custom_profile=JSON.parse(el('customProfile').value);render((await api('/start',data)).flow);data.password='';}
+  try{const profile=el('deviceProfile').value;const data={username:el('kullanici_adi').value.trim(),password,profile,fresh:el('freshLogin').checked,new_device:el('newDevice').checked};if(profile==='custom')data.custom_profile=JSON.parse(el('customProfile').value);const value=await api('/start',data);if(value.flow&&value.flow.id)el('newDevice').checked=false;render(value.flow);data.password='';}
   catch(exc){error(exc.message);el('submitBtn').disabled=false;}finally{password='';el('sifre').value='';busy=false;el('loadingMessage').style.display='none';}
  });
  el('verifyForm').addEventListener('submit',event=>{event.preventDefault();const code=el('verificationCode').value.trim();el('verificationCode').value='';step('code',{code});});
